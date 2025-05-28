@@ -70,7 +70,7 @@ void pre_auton(void) {
 --------------------------------------------*/
 
 void autonomous(void) {
-  int auton_selected = 1;
+  int auton_selected = 3;
   switch(auton_selected) {
     case 1:
       exampleAuton();
@@ -79,6 +79,7 @@ void autonomous(void) {
       exampleAuton2();
       break;  
     case 3:
+      redGoalRush();
       break;
     case 4:
       break; 

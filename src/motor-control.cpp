@@ -4,66 +4,15 @@
 #include <ctime>
 #include <cmath>
 #include "motor-control.h"
-#include "autonomous.h"
-
-// ============================================================================
-// USER-CONFIGURABLE PARAMETERS (CHANGE BEFORE USING THIS TEMPLATE)
-// ============================================================================
-
-// Distance between the middles of the left and right wheels of the drive (in inches)
-double distance_between_wheels = 12.3;
-
-// motor to wheel gear ratio * wheel diameter (in inches) * pi
-double wheel_distance_in = (36.0 / 48.0) * 3.17 * M_PI;
-
-// PID Constants for movement
-// distance_* : Linear PID for straight driving
-// turn_*     : PID for turning in place
-// heading_correction_* : PID for heading correction during linear movement
-double distance_kp = 1.1, distance_ki = 0.1, distance_kd = 7;
-double turn_kp = 0.3, turn_ki = 0, turn_kd = 2.5;
-double heading_correction_kp = 0.6, heading_correction_ki = 0, heading_correction_kd = 4;
-
-bool using_tracking_wheels = true; // Set to true if you are using tracking wheels
-
-// IGNORE THESE IF YOU ARE NOT USING TRACKING WHEELS
-// These comments are in the perspective of a top down view of the robot when the robot is facing forward
-// Vertical distance from the center of the bot to the sideways tracker wheel (in inches, positive is when the wheel is behind the center)
-double sideways_tracker_dist_from_center = 2.71875;
-// Horizontal distance from the center of the bot to the forward tracker wheel (in inches, positive is when the wheel is to the right of the center)
-double forward_tracker_dist_from_center = -0.03125;
-double sideways_tracker_diameter = 1.975; // Diameter of the sideways tracker wheel (in inches)
-double forward_tracker_diameter = 1.975; // Diameter of the forward tracker wheel (in inches)
-
-// ============================================================================
-// ADVANCED TUNING (OPTIONAL)
-// ============================================================================
-
-bool heading_correction = true; // Use heading correction when the bot is stationary
-
-// Set to true for more accuracy and smoothness, false for more speed
-bool dir_change_start = true;   // Allow direction change at start of movement
-bool dir_change_end = true;     // Allow direction change at end of movement
-
-double min_output = 10; // Minimum output voltage to motors while chaining movements
-
-// Maximum allowed change in voltage output per 10 msec during movement
-double max_slew_accel_fwd = 24;
-double max_slew_decel_fwd = 24;
-double max_slew_accel_rev = 24;
-double max_slew_decel_rev = 24;
-
-// Prevents too much slipping during boomerang movements
-// Decrease if there is too much drifting and inconsistency during boomerang
-// Increase for more speed during boomerang
-double chase_power = 2;
+#include "../custom/include/autonomous.h"
+#include "../custom/include/robot-config.h"
 
 // ============================================================================
 // INTERNAL STATE (DO NOT CHANGE)
 // ============================================================================
 bool is_turning = false;
 double prev_left_output = 0, prev_right_output = 0;
-double xpos = 0, ypos = 0;
+double x_pos = 0, y_pos = 0;
 double correct_angle = 0;
 
 // ============================================================================
@@ -791,91 +740,184 @@ void correctHeading() {
 }
 
 /*
- * trackOdom
- * Tracks the robot's position using odometry based on drivetrain wheel rotations and inertial sensor data.
- * Continuously updates the global xpos, ypos, and heading variables.
+ * trackNoOdomWheel
+ * Tracks the robot's position using only drivetrain encoders and inertial sensor.
+ * Assumes no external odometry tracking wheels.
  */
-void trackOdom() {
-  resetChassis(); // Zero encoders
-  double left_deg = 0, right_deg = 0;
-  double delta_left = 0, delta_right = 0;
-  double heading_rad = 0, delta_heading = 0;
-  double delta_y_left = 0, delta_y_right = 0, delta_y = 0;
+void trackNoOdomWheel() {
+  resetChassis();
+  double prev_heading_rad = 0;
+  double prev_left_deg = 0, prev_right_deg = 0;
+  double delta_local_y_in = 0;
 
   while (true) {
-    delta_heading = degToRad(getInertialHeading()) - heading_rad; // Change in heading (radians)
-    delta_left = (getLeftRotationDegree() - left_deg) * wheel_distance_in / 360.0;   // Left wheel delta (inches)
-    delta_right = (getRightRotationDegree() - right_deg) * wheel_distance_in / 360.0; // Right wheel delta (inches)
+    double heading_rad = degToRad(getInertialHeading());
+    double left_deg = getLeftRotationDegree();
+    double right_deg = getRightRotationDegree();
+    double delta_heading_rad = heading_rad - prev_heading_rad; // Change in heading (radians)
+    double delta_left_in = (left_deg - prev_left_deg) * wheel_distance_in / 360.0;   // Left wheel delta (inches)
+    double delta_right_in = (right_deg - prev_right_deg) * wheel_distance_in / 360.0; // Right wheel delta (inches)
     // If no heading change, treat as straight movement
-    if (fabs(delta_heading) < 1e-9) {
-      delta_y = (delta_left + delta_right) / 2.0;
+    if (fabs(delta_heading_rad) < 1e-6) {
+      delta_local_y_in = (delta_left_in + delta_right_in) / 2.0;
     } else {
       // Calculate arc movement for each wheel
-      delta_y_left = 2.0 * sin(delta_heading / 2.0) * (delta_left / delta_heading + distance_between_wheels / 2.0);
-      delta_y_right = 2.0 * sin(delta_heading / 2.0) * (delta_right / delta_heading + distance_between_wheels / 2.0);
-      delta_y = (delta_y_left + delta_y_right) / 2.0;
+      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
+      double delta_local_y_left_in = sin_multiplier * (delta_left_in / delta_heading_rad + distance_between_wheels / 2.0);
+      double delta_local_y_right_in = sin_multiplier * (delta_right_in / delta_heading_rad + distance_between_wheels / 2.0);
+      delta_local_y_in = (delta_local_y_left_in + delta_local_y_right_in) / 2.0;
     }
     // Update global position using polar coordinates
-    xpos += delta_y * sin(heading_rad + delta_heading / 2.0);
-    ypos += delta_y * cos(heading_rad + delta_heading / 2.0);
-    heading_rad = degToRad(getInertialHeading());
-    left_deg = getLeftRotationDegree();
-    right_deg = getRightRotationDegree();
+    double polar_angle_rad = prev_heading_rad + delta_heading_rad / 2.0;
+    double polar_radius_in = delta_local_y_in;
+
+    x_pos += polar_radius_in * sin(polar_angle_rad);
+    y_pos += polar_radius_in * cos(polar_angle_rad);
+
+    prev_heading_rad = heading_rad;
+    prev_left_deg = left_deg;
+    prev_right_deg = right_deg;
+
     wait(10, msec);
   }
 }
 
 /*
- * trackOdomWheel
- * Tracks the robot's position using odometry based on tracker wheel rotations and inertial sensor data.
- * Continuously updates the global xpos, ypos, and heading variables.
+ * trackXYOdomWheel
+ * Tracks the robot’s position using both horizontal and vertical odometry wheels plus inertial heading.
  */
-void trackOdomWheel() {
-  xpos = 0;
-  ypos = 0;
-  resetChassis(); // Zero encoders
-  double prev_heading = degToRad(getInertialHeading());
-  double prev_x = sideways_tracker.position(degrees);
-  double prev_y = forward_tracker.position(degrees);
+void trackXYOdomWheel() {
+  resetChassis();
+  double prev_heading_rad = 0;
+  double prev_horizontal_pos_deg = 0, prev_vertical_pos_deg = 0;
+  double delta_local_x_in = 0, delta_local_y_in = 0;
+  double local_polar_angle_rad = 0;
 
   while (true) {
-    double curr_x = sideways_tracker.position(degrees);
-    double curr_y = forward_tracker.position(degrees);
-    double forward_delta = (curr_y - prev_y) * forward_tracker_diameter * M_PI / 360.0; // Forward tracker delta (inches)
-    double sideways_delta = (curr_x - prev_x) * sideways_tracker_diameter * M_PI / 360.0; // Sideways tracker delta (inches)
-    double new_heading = degToRad(getInertialHeading());
-    double delta_heading = new_heading - prev_heading;
-    prev_x = curr_x;
-    prev_y = curr_y;
-
-    double local_x_pos, local_y_pos;
+    double heading_rad = degToRad(getInertialHeading());
+    double horizontal_pos_deg = horizontal_tracker.position(degrees);
+    double vertical_pos_deg = vertical_tracker.position(degrees);
+    double delta_heading_rad = heading_rad - prev_heading_rad;
+    double delta_horizontal_in = (horizontal_pos_deg - prev_horizontal_pos_deg) * horizontal_tracker_diameter * M_PI / 360.0; // horizontal tracker delta (inches)
+    double delta_vertical_in = (vertical_pos_deg - prev_vertical_pos_deg) * vertical_tracker_diameter * M_PI / 360.0; // vertical tracker delta (inches)
 
     // Calculate local movement based on heading change
-    if (fabs(delta_heading) < 1e-9) {
-      local_x_pos = sideways_delta;
-      local_y_pos = forward_delta;
+    if (fabs(delta_heading_rad) < 1e-6) {
+      delta_local_x_in = delta_horizontal_in;
+      delta_local_y_in = delta_vertical_in;
     } else {
-      double sin_calc = 2 * sin(delta_heading / 2);
-      local_x_pos = sin_calc * ((sideways_delta / delta_heading) + sideways_tracker_dist_from_center);
-      local_y_pos = sin_calc * ((forward_delta / delta_heading) + forward_tracker_dist_from_center);
+      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
+      delta_local_x_in = sin_multiplier * ((delta_horizontal_in / delta_heading_rad) + horizontal_tracker_dist_from_center);
+      delta_local_y_in = sin_multiplier * ((delta_vertical_in / delta_heading_rad) + vertical_tracker_dist_from_center);
     }
 
-    double local_polar_angle, local_polar_length;
-    if (fabs(local_x_pos) < 1e-9 && fabs(local_y_pos) < 1e-9) {
-      local_polar_angle = 0;
-      local_polar_length = 0;
+    // Avoid undefined atan2(0, 0)
+    if (fabs(delta_local_x_in) < 1e-6 && fabs(delta_local_y_in) < 1e-6) {
+      local_polar_angle_rad = 0;
     } else {
-      local_polar_angle = atan2(local_y_pos, local_x_pos);
-      local_polar_length = sqrt(pow(local_x_pos, 2) + pow(local_y_pos, 2));
+      local_polar_angle_rad = atan2(delta_local_y_in, delta_local_x_in);
+    }
+    double polar_radius_in = sqrt(pow(delta_local_x_in, 2) + pow(delta_local_y_in, 2));
+    double polar_angle_rad = local_polar_angle_rad - heading_rad - (delta_heading_rad / 2);
+
+    x_pos += polar_radius_in * cos(polar_angle_rad);
+    y_pos += polar_radius_in * sin(polar_angle_rad);
+
+    prev_heading_rad = heading_rad;
+    prev_horizontal_pos_deg = horizontal_pos_deg;
+    prev_vertical_pos_deg = vertical_pos_deg;
+
+    wait(10, msec);
+  }
+}
+
+/*
+ * trackXOdomWheel
+ * Tracks position using only horizontal odometry wheel + drivetrain encoders + inertial heading.
+ */
+void trackXOdomWheel() {
+  resetChassis();
+  double prev_heading_rad = 0;
+  double prev_horizontal_pos_deg = 0;
+  double prev_left_deg = 0, prev_right_deg = 0;
+  double delta_local_x_in = 0, delta_local_y_in = 0;
+  double local_polar_angle_rad = 0;
+
+  while (true) {
+    double heading_rad = degToRad(getInertialHeading());
+    double horizontal_pos_deg = horizontal_tracker.position(degrees);
+    double left_deg = getLeftRotationDegree();
+    double right_deg = getRightRotationDegree();
+    double delta_heading_rad = heading_rad - prev_heading_rad;
+    double delta_horizontal_in = (horizontal_pos_deg - prev_horizontal_pos_deg) * horizontal_tracker_diameter * M_PI / 360.0; // horizontal tracker delta (inches)
+    double delta_left_in = (left_deg - prev_left_deg) * wheel_distance_in / 360.0;   // Left wheel delta (inches)
+    double delta_right_in = (right_deg - prev_right_deg) * wheel_distance_in / 360.0; // Right wheel delta (inches)
+
+    // Calculate local movement based on heading change
+    if (fabs(delta_heading_rad) < 1e-6) {
+      delta_local_x_in = delta_horizontal_in;
+      delta_local_y_in = (delta_left_in + delta_right_in) / 2.0;
+    } else {
+      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
+      delta_local_x_in = sin_multiplier * ((delta_horizontal_in / delta_heading_rad) + horizontal_tracker_dist_from_center);
+      double delta_local_y_left_in = sin_multiplier * (delta_left_in / delta_heading_rad + distance_between_wheels / 2.0);
+      double delta_local_y_right_in = sin_multiplier * (delta_right_in / delta_heading_rad + distance_between_wheels / 2.0);
+      delta_local_y_in = (delta_local_y_left_in + delta_local_y_right_in) / 2.0;
     }
 
-    double global_polar_angle = local_polar_angle - prev_heading - (delta_heading / 2);
+    if (fabs(delta_local_x_in) < 1e-6 && fabs(delta_local_y_in) < 1e-6) {
+      local_polar_angle_rad = 0;
+    } else {
+      local_polar_angle_rad = atan2(delta_local_y_in, delta_local_x_in);
+    }
+    double polar_radius_in = sqrt(pow(delta_local_x_in, 2) + pow(delta_local_y_in, 2));
+    double polar_angle_rad = local_polar_angle_rad - heading_rad - (delta_heading_rad / 2);
 
-    double x_pos_delta = local_polar_length * cos(global_polar_angle);
-    double y_pos_delta = local_polar_length * sin(global_polar_angle);
-    xpos += x_pos_delta;
-    ypos += y_pos_delta;
-    prev_heading = new_heading;
+    x_pos += polar_radius_in * cos(polar_angle_rad);
+    y_pos += polar_radius_in * sin(polar_angle_rad);
+    
+    prev_heading_rad = heading_rad;
+    prev_horizontal_pos_deg = horizontal_pos_deg;
+    prev_left_deg = left_deg;
+    prev_right_deg = right_deg;
+
+    wait(10, msec);
+  }
+}
+
+/*
+ * trackYOdomWheel
+ * Tracks position using only vertical odometry wheel + inertial heading.
+ */
+void trackYOdomWheel() {
+  resetChassis();
+  double prev_heading_rad = 0;
+  double prev_vertical_pos_deg = 0;
+  double delta_local_y_in = 0;
+
+  while (true) {
+    double heading_rad = degToRad(getInertialHeading());
+    double vertical_pos_deg = vertical_tracker.position(degrees);
+    double delta_heading_rad = heading_rad - prev_heading_rad;
+    double delta_vertical_in = (vertical_pos_deg - prev_vertical_pos_deg) * vertical_tracker_diameter * M_PI / 360.0; // vertical tracker delta (inches)
+
+    // Calculate local movement based on heading change
+    if (fabs(delta_heading_rad) < 1e-6) {
+      delta_local_y_in = delta_vertical_in;
+    } else {
+      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
+      delta_local_y_in = sin_multiplier * ((delta_vertical_in / delta_heading_rad) + vertical_tracker_dist_from_center);
+    }
+
+    double polar_angle_rad = prev_heading_rad + delta_heading_rad / 2.0;
+    double polar_radius_in = delta_local_y_in;
+
+    x_pos += polar_radius_in * cos(polar_angle_rad);
+    y_pos += polar_radius_in * sin(polar_angle_rad);
+
+    prev_heading_rad = heading_rad;
+    prev_vertical_pos_deg = vertical_pos_deg;
+
     wait(10, msec);
   }
 }
@@ -895,7 +937,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
     add = 180; // Add 180 degrees if turning to face backward
   }
   // Calculate target angle using atan2 and normalize
-  double turn_angle = normalizeTarget(radToDeg(atan2(x - xpos, y - ypos))) + add;
+  double turn_angle = normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos))) + add;
   PID pid = PID(turn_kp, turn_ki, turn_kd);
 
   pid.setTarget(turn_angle); // Set PID target
@@ -922,7 +964,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
   int index = 1;
   while (!pid.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec) {
     // Continuously update target as robot moves
-    pid.setTarget(normalizeTarget(radToDeg(atan2(x - xpos, y - ypos))) + add);
+    pid.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos))) + add);
     current_heading = getInertialHeading();
     output = pid.update(current_heading);
 
@@ -981,14 +1023,14 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
   PID pid_heading = PID(heading_correction_kp, heading_correction_ki, heading_correction_kd);
 
   // Set PID targets for distance and heading
-  pid_distance.setTarget(hypot(x - xpos, y - ypos));
+  pid_distance.setTarget(hypot(x - x_pos, y - y_pos));
   pid_distance.setIntegralMax(0);  
   pid_distance.setIntegralRange(3);
   pid_distance.setSmallBigErrorTolerance(threshold, threshold * 3);
   pid_distance.setSmallBigErrorDuration(50, 250);
   pid_distance.setDerivativeTolerance(5);
   
-  pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - xpos, y - ypos)) + add));
+  pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add));
   pid_heading.setIntegralMax(0);  
   pid_heading.setIntegralRange(1);
   
@@ -1009,21 +1051,21 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
   // Main PID loop for moving to point
   while (Brain.timer(msec) - start_time <= time_limit_msec) {
     // Continuously update targets as robot moves
-    pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - xpos, y - ypos)) + add));
-    pid_distance.setTarget(hypot(x - xpos, y - ypos));
+    pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add));
+    pid_distance.setTarget(hypot(x - x_pos, y - y_pos));
     current_angle = getInertialHeading();
     // Calculate drive output based on heading and distance
-    left_output = pid_distance.update(0) * cos(degToRad(atan2(x - xpos, y - ypos) * 180 / M_PI + add - current_angle)) * dir;
+    left_output = pid_distance.update(0) * cos(degToRad(atan2(x - x_pos, y - y_pos) * 180 / M_PI + add - current_angle)) * dir;
     right_output = left_output;
     // Check if robot has crossed the perpendicular line to the target
-    perpendicular_line = ((ypos - y) * -cos(degToRad(normalizeTarget(current_angle + add))) <= (xpos - x) * sin(degToRad(normalizeTarget(current_angle + add))) + exittolerance);
+    perpendicular_line = ((y_pos - y) * -cos(degToRad(normalizeTarget(current_angle + add))) <= (x_pos - x) * sin(degToRad(normalizeTarget(current_angle + add))) + exittolerance);
     if(perpendicular_line && !prev_perpendicular_line) {
       break;
     }
     prev_perpendicular_line = perpendicular_line;
 
     // Only apply heading correction if far from target
-    if(hypot(x - xpos, y - ypos) > 8 && ch == true) {
+    if(hypot(x - x_pos, y - y_pos) > 8 && ch == true) {
       correction_output = pid_heading.update(current_angle);
     } else {
       correction_output = 0;
@@ -1126,7 +1168,7 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
   pid_distance.setSmallBigErrorDuration(50, 250);
   pid_distance.setDerivativeTolerance(5);
 
-  pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - xpos, y - ypos))));
+  pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos))));
   pid_heading.setIntegralMax(0);  
   pid_heading.setIntegralRange(1);
   pid_heading.setSmallBigErrorTolerance(0, 0);
@@ -1142,17 +1184,17 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
 
   // Main PID loop for boomerang path
   while ((!pid_distance.targetArrived()) && Brain.timer(msec) - start_time <= time_limit_msec) {
-    hypotenuse = hypot(xpos - x, ypos - y); // Distance to target
+    hypotenuse = hypot(x_pos - x, y_pos - y); // Distance to target
     // Calculate carrot point for path leading
     carrot_x = x - hypotenuse * sin(degToRad(a + add)) * dlead;
     carrot_y = y - hypotenuse * cos(degToRad(a + add)) * dlead;
-    pid_distance.setTarget(hypot(carrot_x - xpos, carrot_y - ypos) * dir);
+    pid_distance.setTarget(hypot(carrot_x - x_pos, carrot_y - y_pos) * dir);
     current_angle = getInertialHeading();
     // Calculate drive output based on carrot point
-    left_output = pid_distance.update(0) * cos(degToRad(atan2(carrot_x - xpos, carrot_y - ypos) * 180 / M_PI + add - current_angle));
+    left_output = pid_distance.update(0) * cos(degToRad(atan2(carrot_x - x_pos, carrot_y - y_pos) * 180 / M_PI + add - current_angle));
     right_output = left_output;
     // Check if robot has crossed the perpendicular line to the target
-    perpendicular_line = ((ypos - y) * -cos(degToRad(normalizeTarget(a))) <= (xpos - x) * sin(degToRad(normalizeTarget(a))) + exit_tolerance);
+    perpendicular_line = ((y_pos - y) * -cos(degToRad(normalizeTarget(a))) <= (x_pos - x) * sin(degToRad(normalizeTarget(a))) + exit_tolerance);
     if(perpendicular_line && !prev_perpendicular_line) {
       break;
     }
@@ -1164,22 +1206,22 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
     }
 
     // Heading correction logic based on distance to carrot/target
-    if(hypot(carrot_x - xpos, carrot_y - ypos) > 8) {
-      pid_heading.setTarget(normalizeTarget(radToDeg(atan2(carrot_x - xpos, carrot_y - ypos)) + add));
+    if(hypot(carrot_x - x_pos, carrot_y - y_pos) > 8) {
+      pid_heading.setTarget(normalizeTarget(radToDeg(atan2(carrot_x - x_pos, carrot_y - y_pos)) + add));
       correction_output = pid_heading.update(current_angle);
-    } else if(hypot(x - xpos, y - ypos) > 6) {
-      pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - xpos, y - ypos)) + add));
+    } else if(hypot(x - x_pos, y - y_pos) > 6) {
+      pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add));
       correction_output = pid_heading.update(current_angle);
     } else {
       pid_heading.setTarget(normalizeTarget(a));
       correction_output = pid_heading.update(current_angle);
-      if(exit && hypot(x - xpos, y - ypos) < 5) {
+      if(exit && hypot(x - x_pos, y - y_pos) < 5) {
         break;
       }
     }
 
     // Limit slip speed for smoother curves
-    slip_speed = sqrt(chase_power * getRadius(xpos, ypos, carrot_x, carrot_y, current_angle) * 9.8);
+    slip_speed = sqrt(chase_power * getRadius(x_pos, y_pos, carrot_x, carrot_y, current_angle) * 9.8);
     if(left_output > slip_speed) {
       left_output = slip_speed;
     } else if(left_output < -slip_speed) {

@@ -45,9 +45,14 @@ Welcome to RW-Template! This project is an advanced **VEX V5 autonomous robotics
 ### ⛓️ Motion Chaining
 - Seamlessly links multiple motion commands for fluid, uninterrupted autonomous routines.
 
+### 💡 Easy Updates
+- `custom/` folder isolates personal changes from core logic  
+- future updates to core code are seamless
+- copy/paste portability across projects or seasons  
+
 ---
 
-## 🛠️ Installation Guide
+## 🛠️ Installation/Update Guide
 
 Follow these steps to set up the project on your local machine:
 
@@ -63,50 +68,63 @@ Follow these steps to set up the project on your local machine:
    - Open the **VEX Extension sidebar** in VS Code.
    - Click `Import Project`
    - Choose the downloaded ZIP file. 
+   - If you are an existing user, copy and paste the custom folder of the old version into the new project for updating to newer versions. 
 
 ---
 
 ## 📘 Usage Guide
 
+**Note: Anything modified outside of the custom folder will not be preserved in updates.**
+
 ### 1. Project Structure
 
 Your project is organized into the following folders and files:
 
+**custom/include/**
+- `autonomous.h` — Declarations for autonomous routines  
+- `robot-config.h` — Declarations for robot devices
+- `user.h` — Declarations for user functions
+
+**custom/src/**
+- `autonomous.cpp` — Your autonomous routines  
+- `robot-config.cpp` — Your robot's device configurations
+- `user.cpp` — User functions
+
 **include/**
-- `motor-control.h` — Main drive and control function declarations  
-- `robot-config.h` — Device and sensor declarations  
-- `utils.h` — Math and utility functions
+- `motor-control.h` — Core drive and motion control function declarations  
+- `pid.h` — Reusable PID controller class declaration  
+- `utils.h` — Math and geometry utility functions  
+- `vex.h` — Standard VEX libraries and device setup
 
 **src/**
-- `main.cpp` — Competition entry point and main logic  
-- `motor-control.cpp` — Main drive and control function implementations  
-- `robot-config.cpp` — Device and sensor setup  
-- `utils.cpp` — Math and utility function implementations  
-- `autonomous.cpp` — Your autonomous routines
+- `main.cpp` — Competition entry point and control flow  
+- `motor-control.cpp` — Core drive and motion control function implementations  
+- `pid.cpp` — PID controller logic  
+- `utils.cpp` — Math and geometry utility function implementations
 
 ### 2. Robot Configuration
 
-Edit `robot-config.cpp` and `robot-config.h` to match your robot’s hardware.
+Edit `custom/src/robot-config.cpp` and `custom/include/robot-config.h` to match your robot’s hardware.
 
-- Set the correct ports for motors, sensors, and the controller  
+- Set the correct ports for motors, sensors, and other robot devices
 - Group drive motors into `left_chassis` and `right_chassis` motor groups
 
 ### 3. Tuning Your Robot
 
-In `motor-control.cpp`, locate the section labeled **USER-CONFIGURABLE PARAMETERS** and adjust the following:
+In `custom/src/robot-config.cpp`, locate the section labeled **USER-CONFIGURABLE PARAMETERS** and adjust the following:
 
 - `distance_between_wheels`: Distance between the left and right wheels (in inches)  
 - `wheel_distance_in`: Wheel circumference (see comments in code for help)  
 - PID constants: `distance_kp`, `distance_ki`, `distance_kd`, etc.
 
-If using tracking wheels:
+If using a horizontal and/or vertical tracking wheel:
 
-- Set `using_tracking_wheels = true`  
+- Set `using_horizontal_tracker = true` and/or `using_vertical_tracker = true`
 - Configure tracker distances and diameters accordingly
 
 ### 4. Autonomous Programming
 
-Edit `autonomous.cpp` to define your autonomous routines.
+Edit `custom/src/autonomous.cpp` to define your autonomous routines.
 
 You can use the motion functions from `motor-control.h`:
 
@@ -115,11 +133,11 @@ You can use the motion functions from `motor-control.h`:
 - `moveToPoint(x, y, dir, time_limit, exit, max_output, overturn)`  
 - `boomerang(x, y, dir, angle, dlead, time_limit, exit, max_output, overturn)`
 
-Select the routine to run inside the `autonomous()` function in `main.cpp`.
+Select the routine to run inside the `runAutonomous()` function in `custom/src/user.cpp`.
 
 ### 5. Driver Control
 
-Edit the `usercontrol()` function in `main.cpp`.
+Edit the `runDriver()` function in `custom/src/user.cpp`.
 
 By default, it uses tank drive:
 
@@ -129,15 +147,15 @@ You can customize this for:
 
 - Arcade drive  
 - Split arcade  
-- Add button controls for mechanisms
+- Adding button controls for mechanisms
 
 ### 6. Competition Setup
 
 This template follows the VEX Competition structure:
 
-- `pre_auton()` runs once at startup (ideal for sensor calibration)  
-- `autonomous()` runs during the autonomous period  
-- `usercontrol()` runs during the driver control period  
+- `pre_auton()` which calls `runPreAutonomous()` runs once at startup (ideal for sensor calibration)  
+- `autonomous()` which calls `runAutonomous()` runs during the autonomous period  
+- `usercontrol()` which calls `runDriver()` runs during the driver control period  
 - The `main()` function connects all of these automatically
 
 ### 7. Tips for Success
@@ -146,12 +164,13 @@ This template follows the VEX Competition structure:
 - Tune PID values for optimal performance  
 - Test motion functions like `driveTo`, `turnToAngle`, and `moveToPoint` individually  
 - Use odometry for advanced navigation (with or without tracking wheels)  
-- Don’t hesitate to reach out to mentors or the VEX community for help
+- Don’t hesitate to reach out to me or the VEX community for help
+- Join our discord (link is in the description)
 
 ### 8. Where to Start
 
-- Set up ports and devices in `robot-config.cpp` and `robot-config.h`  
-- Input chassis measurements and PID values in `motor-control.cpp`  
+- Set up ports and devices in `custom/src/robot-config.cpp` and `custom/include/robot-config.h`  
+- Input chassis measurements and PID values in `custom/src/robot-config.cpp`  
 - Confirm movement and controls via driver control testing  
 - Create and test simple autonomous routines  
 - Expand with more complex logic and paths as you grow confident

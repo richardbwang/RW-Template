@@ -64,12 +64,11 @@ Follow these steps to set up the project on your local machine:
    - Open the Extensions view (`Ctrl/Cmd+Shift+X`)
    - Search for and install **"VEX Robotics Extension"** by VEX Robotics
 
-3. **Import the Project ZIP**
-   - Download the ZIP file from the release section below.
-   - Open the **VEX Extension sidebar** in VS Code.
-   - Click `Import Project`
-   - Choose the downloaded ZIP file. 
-   - If you are an existing user, copy and paste the custom folder of the old version into the new project for updating to newer versions. 
+3. **Set up the project folder**
+   - Download the latest version's ZIP file titled **`RW-Template.zip`** (not the source code files) from the [Releases](https://github.com/richardbwang/RW-Template/releases) section below
+   - Unzip the downloaded file
+   - Open the resulting folder with Visual Studio Code
+   - If you are an existing user, copy and paste the **custom** folder of the old version into the new project for updating to newer versions
 
 ---
 

@@ -71,10 +71,10 @@ double getRightRotationDegree() {
  */
 double normalizeTarget(double angle) {
   // Adjust angle to be within +/-180 degrees of the inertial sensor's rotation
-  if (angle - inertial_sensor.rotation() > 180) {
-    while (angle - inertial_sensor.rotation() > 180) angle -= 360;
-  } else if (angle - inertial_sensor.rotation() < -180) {
-    while (angle - inertial_sensor.rotation() < -180) angle += 360;
+  if (angle - getInertialHeading() > 180) {
+    while (angle - getInertialHeading() > 180) angle -= 360;
+  } else if (angle - getInertialHeading() < -180) {
+    while (angle - getInertialHeading() < -180) angle += 360;
   }
   return angle;
 }

@@ -10,7 +10,7 @@ extern double correct_angle;
 // --- Function Declarations (lowerCamelCase) ---
 void driveChassis(double left_power, double right_power);
 
-double getInertialHeading(bool normalize = false);
+double getInertialHeading();
 double normalizeTarget(double angle);
 
 void turnToAngle(double turn_angle, double time_limit_msec, bool exit = true, double max_output = 12);

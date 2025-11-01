@@ -83,7 +83,7 @@ double normalizeTarget(double angle) {
  * Returns the current inertial sensor heading in degrees.
  * - normalize: If true, normalizes the heading (not used in this implementation).
  */
-double getInertialHeading(bool normalize) {
+double getInertialHeading() {
   // Get inertial sensor rotation in degrees
   return inertial_sensor.rotation(degrees);
 }

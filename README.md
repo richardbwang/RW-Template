@@ -1,5 +1,7 @@
 # RW-Template
 
+Updates every 5-15 minutes
+
 <img src="https://img.shields.io/github/downloads/richardbwang/RW-Template/total?style=for-the-badge">
 <img src="https://img.shields.io/github/stars/richardbwang/RW-Template?style=for-the-badge">
 

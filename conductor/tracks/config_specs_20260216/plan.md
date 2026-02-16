@@ -19,4 +19,4 @@
     - [x] Configure `distance_kp`, `distance_ki`, `distance_kd`.
     - [x] Configure `turn_kp`, `turn_ki`, `turn_kd`.
     - [x] Configure `heading_correction_kp`, `heading_correction_ki`, `heading_correction_kd`.
-- [~] Task: Conductor - User Manual Verification 'Physical Constants & PID Tuning' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Physical Constants & PID Tuning' (Protocol in workflow.md) b7f33a2

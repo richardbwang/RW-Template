@@ -5,7 +5,7 @@
     - [ ] Map left chassis motor group.
     - [ ] Map right chassis motor group.
     - [ ] Map scoring mechanism motors (intake, lift, etc.).
-- [ ] Task: Configure sensor ports for autonomous navigation.
+- [~] Task: Configure sensor ports for autonomous navigation.
     - [ ] Assign inertial sensor port.
     - [ ] Assign odometry tracking wheel ports (if used).
     - [ ] Assign distance sensor ports for resets.

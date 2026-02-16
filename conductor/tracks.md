@@ -6,3 +6,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 - [x] **Track: Configuring project with robot specifications**
   *Link: [./tracks/config_specs_20260216/](./tracks/config_specs_20260216/)*
+
+---
+
+- [ ] **Track: Tuning Robot Physical Constants and PID**
+  *Link: [./tracks/tuning_specs_20260216/](./tracks/tuning_specs_20260216/)*

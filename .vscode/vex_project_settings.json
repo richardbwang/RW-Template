@@ -1,0 +1,18 @@
+{
+	"project": {
+		"name": "RW-Template",
+		"slot": 1,
+		"description": "Empty V5 C++ Project",
+		"platform": "V5",
+		"creationDate": "Mon, 16 Feb 2026 18:25:59 GMT",
+		"language": "cpp",
+		"sdkVersion": "V5_20240802_15_00_00",
+		"cpp": {
+			"includePath": []
+		}
+	},
+	"extension": {
+		"version": "0.8.2026020401",
+		"json": 1
+	}
+}

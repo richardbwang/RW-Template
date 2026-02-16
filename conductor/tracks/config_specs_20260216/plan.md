@@ -12,9 +12,9 @@
 - [x] Task: Conductor - User Manual Verification 'Hardware Port Mapping' (Protocol in workflow.md) 2ee9086
 
 ## Phase 2: Physical Constants & PID Tuning
-- [~] Task: Set chassis physical constants in `custom/src/robot-config.cpp`.
-    - [ ] Define `distance_between_wheels`.
-    - [ ] Calculate and set `wheel_distance_in` based on gear ratio and wheel diameter.
+- [x] Task: Set chassis physical constants in `custom/src/robot-config.cpp`. 2ee9086
+    - [x] Define `distance_between_wheels`.
+    - [x] Calculate and set `wheel_distance_in` based on gear ratio and wheel diameter.
 - [ ] Task: Set initial PID constants for motion control.
     - [ ] Configure `distance_kp`, `distance_ki`, `distance_kd`.
     - [ ] Configure `turn_kp`, `turn_ki`, `turn_kd`.

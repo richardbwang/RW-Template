@@ -10,49 +10,41 @@ brain  Brain;
 // VEXcode device constructors
 controller controller_1 = controller(primary);
 
-// IMPORTANT: Remember to modify the example motors according to the guide. 
-// Also remember to add respective device declarations to custom/include/robot-config.h
-// Format: motor(port, gearSetting, reversed)
-// gearSetting is one of the following: ratio36_1(red), ratio18_1(green), ratio6_1(blue)
-// all chassis motors should be reversed appropriately so that they spin vertical when given a positive voltage input
-// such as driveChassis(12, 12)
-motor left_chassis1 = motor(PORT1, ratio6_1, true);
-motor left_chassis2 = motor(PORT2, ratio6_1, true);
-motor left_chassis3 = motor(PORT3, ratio6_1, false);
+// Drive motors
+motor left_chassis1 = motor(PORT20, ratio6_1, true);
+motor left_chassis2 = motor(PORT19, ratio6_1, true);
+motor left_chassis3 = motor(PORT18, ratio6_1, true);
 motor_group left_chassis = motor_group(left_chassis1, left_chassis2, left_chassis3);
-motor right_chassis1 = motor(PORT4, ratio6_1, false);
-motor right_chassis2 = motor(PORT5, ratio6_1, false);
-motor right_chassis3 = motor(PORT6, ratio6_1, true);
+
+motor right_chassis1 = motor(PORT11, ratio6_1, false);
+motor right_chassis2 = motor(PORT12, ratio6_1, false);
+motor right_chassis3 = motor(PORT13, ratio6_1, false);
 motor_group right_chassis = motor_group(right_chassis1, right_chassis2, right_chassis3);
 
-inertial inertial_sensor = inertial(PORT7);
-optical example_optical_sensor = optical(PORT8);
-distance example_distance_sensor = distance(PORT9);
-digital_out example_piston = digital_out(Brain.ThreeWirePort.A);
+// Intake motors
+motor intake_motor1 = motor(PORT1, ratio18_1, false);
+motor intake_motor2 = motor(PORT10, ratio18_1, true);
+motor_group intake_motors = motor_group(intake_motor1, intake_motor2);
 
-// Format is rotation(port, reversed)
-// just set these to random ports if you don't use tracking wheels
-rotation horizontal_tracker = rotation(PORT10, true);
-rotation vertical_tracker = rotation(PORT11, true);
+// Sensors
+inertial inertial_sensor = inertial(PORT21);
+rotation horizontal_tracker = rotation(PORT9, true);
+rotation vertical_tracker = rotation(PORT8, true);
 
 // Distance reset sensors
-// Set these to random ports if you are not using distance resets
-distance front_sensor = distance(PORT12);
-distance left_sensor = distance(PORT13);
-distance right_sensor = distance(PORT14);
-distance back_sensor = distance(PORT15);
+distance front_sensor = distance(PORT5);
+distance left_sensor = distance(PORT4);
+distance right_sensor = distance(PORT3);
+distance back_sensor = distance(PORT6);
 
-// game specific devices for high stakes
-motor arm_motor1 = motor(PORT16, ratio18_1, true);
-motor arm_motor2 = motor(PORT17, ratio18_1, false);
-motor_group arm_motor = motor_group(arm_motor1, arm_motor2);
-motor intake_motor = motor(PORT18, ratio18_1, true);
-digital_out claw = digital_out(Brain.ThreeWirePort.B);
-digital_out rush_arm = digital_out(Brain.ThreeWirePort.C);
-optical optical_sensor = optical(PORT19);
-distance intake_distance = distance(PORT20);
-distance clamp_distance = distance(PORT21);
-digital_out mogo_mech = digital_out(Brain.ThreeWirePort.D);
+// Pneumatics (three-wire ports)
+digital_out trip_state_1 = digital_out(Brain.ThreeWirePort.A);
+digital_out odom_lift = digital_out(Brain.ThreeWirePort.B);
+digital_out little_will = digital_out(Brain.ThreeWirePort.C);
+digital_out wing = digital_out(Brain.ThreeWirePort.D);
+digital_out trip_state_2 = digital_out(Brain.ThreeWirePort.E);
+digital_out middle_descore = digital_out(Brain.ThreeWirePort.F);
+digital_out fast_score = digital_out(Brain.ThreeWirePort.G);
 
 // ============================================================================
 // USER-CONFIGURABLE PARAMETERS (CHANGE BEFORE USING THIS TEMPLATE)
@@ -73,24 +65,25 @@ double turn_kp = 0.3, turn_ki = 0, turn_kd = 2.5;
 double heading_correction_kp = 0.6, heading_correction_ki = 0, heading_correction_kd = 4;
 
 // Enable or disable the use of tracking wheels
-bool using_horizontal_tracker = false;  // Set to true if a horizontal tracking wheel is installed and used for odometry
-bool using_vertical_tracker = false;   // Set to true if a vertical tracking wheel is installed and used for odometry
+bool using_horizontal_tracker = true; 
+bool using_vertical_tracker = true;   
 
-// IGNORE THESE IF YOU ARE NOT USING TRACKING WHEELS
-// These comments are in the perspective of a top down view of the robot when the robot is facing vertical
+// Odom offsets (inches) from AGENT.md
+// These comments are in the perspective of a top down view of the robot when the robot is facing vertical      
 // Vertical distance from the center of the bot to the horizontal tracking wheel (in inches, positive is when the wheel is behind the center)
-double horizontal_tracker_dist_from_center = 2.71875;
+double horizontal_tracker_dist_from_center = 2.5;
 // Horizontal distance from the center of the bot to the vertical tracking wheel (in inches, positive is when the wheel is to the right of the center)
-double vertical_tracker_dist_from_center = -0.03125;
-double horizontal_tracker_diameter = 1.975; // Diameter of the horizontal tracker wheel (in inches)
-double vertical_tracker_diameter = 1.975; // Diameter of the vertical tracker wheel (in inches)
+double vertical_tracker_dist_from_center = 1.0;
+
+double horizontal_tracker_diameter = 2.0; // Defaulting to 2.0 unless specified
+double vertical_tracker_diameter = 2.0;   // Defaulting to 2.0 unless specified
 
 // Distance Reset setup
 // Set all of these values to the distance from the respective distance sensor to the robot's center along the axis it faces(in inches)
-// The front sensor offset is the distance from the front distance sensor to the robot center along the Y axis
-// The back sensor offset is the distance from the back distance sensor to the robot center along the Y axis
-// The left sensor offset is the distance from the left distance sensor to the robot center along the X axis
-// The right sensor offset is the distance from the right distance sensor to the robot center along the X axis
+// The front sensor offset is the distance from the front distance sensor to the robot center along the Y axis  
+// The back sensor offset is the distance from the back distance sensor to the robot center along the Y axis    
+// The left sensor offset is the distance from the left distance sensor to the robot center along the X axis    
+// The right sensor offset is the distance from the right distance sensor to the robot center along the X axis  
 // All values should be positive numbers
 // If you are not using all four distance sensors, just set the unused ones to 0
 // If you are not using distance resets these values will be ignored
@@ -103,38 +96,25 @@ double back_sensor_offset = 0.0;
 // ADVANCED TUNING (OPTIONAL)
 // ============================================================================
 
-bool heading_correction = true; // Use heading correction when the bot is stationary
+bool heading_correction = true; 
+bool dir_change_start = true;   
+bool dir_change_end = true;     
 
-// Set to true for more accuracy and smoothness, false for more speed
-bool dir_change_start = true;   // Less accel/decel due to expecting direction change at start of movement
-bool dir_change_end = true;     // Less accel/decel due to expecting direction change at end of movement
+double min_output = 10; 
 
-double min_output = 10; // Minimum output voltage to motors while chaining movements
-
-// Maximum allowed change in voltage output per 10 msec during movement
 double max_slew_accel_fwd = 24;
 double max_slew_decel_fwd = 24;
 double max_slew_accel_rev = 24;
 double max_slew_decel_rev = 24;
 
-// Prevents too much slipping during boomerang movements
-// Decrease if there is too much drifting and inconsistency during boomerang
-// Increase for more speed during boomerang
 double chase_power = 2;
 
 // ============================================================================
 // DO NOT CHANGE ANYTHING BELOW
 // ============================================================================
 
-// VEXcode generated functions
-// define variable for remote controller enable/disable
 bool RemoteControlCodeEnabled = true;
 
-/**
- * Used to initialize code/tasks/devices added using tools in VEXcode Pro.
- * 
- * This should be called at the start of your int main function.
- */
 void vexcodeInit(void) {
   // nothing to initialize
 }

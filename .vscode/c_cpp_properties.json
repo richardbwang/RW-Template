@@ -1,0 +1,49 @@
+{
+	"env": {
+		"vex_compilerPath": "${config:vexrobotics.vexcode.Cpp.Toolchain.Path}/clang/bin/clang",
+		"vex_sdkPath": "${config:vexrobotics.vexcode.Cpp.Sdk.Home}/V5/V5_20240802_15_00_00/vexv5",
+		"vex_gcc": "${vex_sdkPath}/gcc/include/c++/4.9.3",
+		"vex_sdkIncludes": [
+			"${vex_sdkPath}/clang/8.0.0/include/**",
+			"${vex_gcc}/**",
+			"${vex_gcc}/arm-none-eabi/thumb",
+			"${vex_sdkPath}/gcc/include",
+			"${vex_sdkPath}/include/**",
+			"${workspaceFolder}/include/**",
+			"${workspaceFolder}/src/**"
+		]
+	},
+	"configurations": [
+		{
+			"name": "Win32",
+			"includePath": [
+				"${vex_sdkIncludes}"
+			],
+			"compilerPath": "${vex_compilerPath}",
+			"cStandard": "gnu99",
+			"cppStandard": "gnu++11",
+			"intelliSenseMode": "windows-clang-x86"
+		},
+		{
+			"name": "Mac",
+			"includePath": [
+				"${vex_sdkIncludes}"
+			],
+			"compilerPath": "${vex_compilerPath}",
+			"cStandard": "gnu99",
+			"cppStandard": "gnu++11",
+			"intelliSenseMode": "macos-clang-x86"
+		},
+		{
+			"name": "Linux",
+			"includePath": [
+				"${vex_sdkIncludes}"
+			],
+			"compilerPath": "",
+			"cStandard": "gnu99",
+			"cppStandard": "gnu++11",
+			"intelliSenseMode": "linux-clang-x86"
+		}
+	],
+	"version": 4
+}

@@ -6,35 +6,42 @@ extern brain Brain;
 
 // VEXcode devices
 extern controller controller_1;
+
+// Drive motors
 extern motor left_chassis1;
 extern motor left_chassis2;
 extern motor left_chassis3;
 extern motor_group left_chassis;
+
 extern motor right_chassis1;
 extern motor right_chassis2;
 extern motor right_chassis3;
 extern motor_group right_chassis;
+
+// Intake motors
+extern motor intake_motor1;
+extern motor intake_motor2;
+extern motor_group intake_motors;
+
+// Sensors
 extern inertial inertial_sensor;
-extern optical example_optical_sensor;
-extern distance example_distance_sensor;
-extern digital_out example_piston;
 extern rotation horizontal_tracker;
 extern rotation vertical_tracker;
+
+// Distance reset sensors
 extern distance front_sensor;
 extern distance left_sensor;
 extern distance right_sensor;
 extern distance back_sensor;
 
-extern motor arm_motor1;
-extern motor arm_motor2;
-extern motor_group arm_motor;
-extern motor intake_motor;
-extern digital_out claw;
-extern digital_out rush_arm;
-extern optical optical_sensor;
-extern distance intake_distance;
-extern distance clamp_distance;
-extern digital_out mogo_mech;
+// Pneumatics (three-wire ports)
+extern digital_out trip_state_1;
+extern digital_out odom_lift;
+extern digital_out little_will;
+extern digital_out wing;
+extern digital_out trip_state_2;
+extern digital_out middle_descore;
+extern digital_out fast_score;
 
 // USER-CONFIGURABLE PARAMETERS (CHANGE BEFORE USING THIS TEMPLATE)
 extern double distance_between_wheels;

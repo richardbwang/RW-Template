@@ -1,7 +1,7 @@
 # Plan: Configuring project with robot specifications
 
 ## Phase 1: Hardware Port Mapping
-- [ ] Task: Configure motor ports for drivetrain and scoring mechanisms in `custom/src/robot-config.cpp`.
+- [x] Task: Configure motor ports for drivetrain and scoring mechanisms in `custom/src/robot-config.cpp`. 810648b
     - [ ] Map left chassis motor group.
     - [ ] Map right chassis motor group.
     - [ ] Map scoring mechanism motors (intake, lift, etc.).

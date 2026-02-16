@@ -25,16 +25,9 @@ extern distance left_sensor;
 extern distance right_sensor;
 extern distance back_sensor;
 
-extern motor arm_motor1;
-extern motor arm_motor2;
-extern motor_group arm_motor;
+extern motor lift_motor;
 extern motor intake_motor;
-extern digital_out claw;
-extern digital_out rush_arm;
-extern optical optical_sensor;
-extern distance intake_distance;
-extern distance clamp_distance;
-extern digital_out mogo_mech;
+extern digital_out clamp;
 
 // USER-CONFIGURABLE PARAMETERS (CHANGE BEFORE USING THIS TEMPLATE)
 extern double distance_between_wheels;

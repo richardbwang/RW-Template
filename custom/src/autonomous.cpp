@@ -14,34 +14,44 @@
 
 void exampleAuton() {
   // Use this for tuning linear and turn pid
-  driveTo(60, 3000);
-  turnToAngle(90, 2000);
-  turnToAngle(135, 2000);
-  turnToAngle(150, 2000);
-  turnToAngle(160, 2000);
-  turnToAngle(165, 2000);
-  turnToAngle(0, 2000);
-  driveTo(-60, 3000);
+  moveToPoint(0, 24, 1, 1000, true, 100);
+  //turnToAngle(90, 1000);
+  //turnToAngle(135, 2000);
+  //turnToAngle(150, 2000);
+  //turnToAngle(160, 2000);
+  //turnToAngle(165, 2000);
+  //turnToAngle(0, 2000);
+  //driveTo(-24, 1000, true, 100);
 }
 
 void exampleAuton2() {
-  moveToPoint(24, 24, 1, 2000, false);
-  moveToPoint(48, 48, 1, 2000, true);
-  moveToPoint(24, 24, -1, 2000, true);
-  moveToPoint(0, 0, 1, 2000, true);
-  correct_angle = 0;
-  driveTo(24, 2000, false, 8);
-  turnToAngle(90, 800, false);
-  turnToAngle(180, 800, true);
+  moveToPoint(0, 33, 1, 1000, true, 100);
+  turnToAngle(90, 1000);
+  moveToPoint(25, 33, 1, 1000, true, 100);
+  moveToPoint(-25, 33, -1, 1500, true, 5);
+  wait(1000, msec);
+  // turnToAngle(90, 1000);
+  // wait(1000, msec);
+  moveToPoint(15, 33, 1, 1000, true, 50);
+  turnToAngle(225, 1000);
+  moveToPoint(30, 20, 1, 1000, true, 100);
+  driveTo(20, 1000, true, 100);
 }
 
-double arm_pid_target = 0, arm_load_target = 60, arm_store_target = 250, arm_score_target = 470;
+void autonSawp(){
+  moveToPoint(0, 48, 1, 1000, true, 100);
+  turnToAngle(90, 1000);
+  
+}
+//double arm_pid_target = 0, arm_load_target = 60, arm_store_target = 250, arm_score_target = 470;
 
 /*
  * armPID
  * Runs a single PID update for the arm motor to reach the specified target position.
  * - arm_target: Desired arm position (degrees).
  */
+
+/*
 void armPID(double arm_target) {
   PID pidarm = PID(0.1, 0, 0.5); // Initialize PID controller for arm
   pidarm.setTarget(arm_target);   // Set target position
@@ -53,23 +63,29 @@ void armPID(double arm_target) {
   pidarm.setArrive(true);
   arm_motor.spin(fwd, pidarm.update(arm_motor.position(deg)), volt); // Apply PID output to arm motor
 }
+  */
 
 /*
  * armPIDLoop
  * Continuously runs the arm PID control in a separate thread, keeping the arm at the target position.
  */
+
+ /*
 void armPIDLoop() {
   while(true) {
     armPID(arm_pid_target); // Continuously update arm position
     wait(10, msec);
   }
 }
+  */
 
 /*
  * rushClamp
  * Waits until the clamp distance sensor detects an object within 85mm, then closes the claw and lowers the rush arm.
  * Used for quickly grabbing a mobile goal at the start of autonomous.
  */
+
+ /*
 void rushClamp() {
   while(clamp_distance.objectDistance(mm) > 85) { // Wait for object to be close enough
     wait(10, msec);
@@ -83,6 +99,7 @@ void rushClamp() {
  * Runs the intake until an object is detected by the optical or distance sensor, then stops the intake.
  * Used for picking up rings or other objects during autonomous.
  */
+ /*
 void intakeThread(){
   optical_sensor.setLight(ledState::on);      // Turn on optical sensor light
   optical_sensor.setLightPower(100);          // Set light power to max
@@ -91,13 +108,15 @@ void intakeThread(){
   }
   intake_motor.stop(hold);                    // Stop intake motor and hold
 }
-
+*/
 /*
  * redGoalRush
  * 2024-2025 World Championship runner-up(1698V) autonomous routine.
  * This routine executes a complex sequence to rush, grab, and score mobile goals and rings.
  * It uses multiple threads for simultaneous arm, clamp, and intake control.
  */
+
+ /*
 void redGoalRush() {
   arm_motor.setPosition(arm_load_target, deg);         // Set arm to load position
   correct_angle = inertial_sensor.rotation();          // Sync correct_angle with inertial sensor
@@ -176,3 +195,5 @@ void redGoalRush() {
   turnToAngle(40, 200);                                // Final turn for alignment
   driveChassis(1, 1);                                  // Slow drive forward
 }
+
+*/

@@ -1,0 +1,9 @@
+-I"C:/Users/Rekha Rajan/AppData/Roaming/VEX Robotics/VEXcode Pro V5/sdk/v5/include"
+-I"C:/Users/Rekha Rajan/AppData/Roaming/VEX Robotics/VEXcode Pro V5/sdk/v5/gcc/include"
+-I"${config:vexrobotics.vexcode.Cpp.Sdk.Home}/V5/V5_20240802_15_00_00/vexv5/gcc/include/sys"
+-Iinclude
+-Isrc
+-Icustom/include
+-xc++
+-std=c++11
+-Wall

@@ -1,0 +1,12 @@
+{
+	"clangd.path": "C:\\Program Files\\LLVM\\bin\\clangd.exe",
+	"C_Cpp.intelliSenseEngine": "disabled",
+	"clangd.arguments": [
+		"--compile-commands-dir=${workspaceFolder}",
+		"--query-driver=C:\\Program Files\\LLVM\\bin\\clang*.exe",
+		"--header-insertion=never"
+	],
+	"C_Cpp.default.systemIncludePath": [
+		"${config:vexrobotics.vexcode.Cpp.Sdk.Home}/V5/V5_20240802_15_00_00/vexv5/gcc/include/sys"
+	]
+}

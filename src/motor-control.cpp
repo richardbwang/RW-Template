@@ -4,7 +4,8 @@
 #include <ctime>
 #include <cmath>
 #include "motor-control.h"
-#include "robot-config.h"
+#include "../custom/include/autonomous.h"
+#include "../custom/include/robot-config.h"
 
 // ============================================================================
 // INTERNAL STATE (DO NOT CHANGE)

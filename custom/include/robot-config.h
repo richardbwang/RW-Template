@@ -57,6 +57,7 @@ extern motor flaps;
 extern digital_out hood;
 extern digital_out matchloader;
 extern digital_out descorer;
+extern digital_out middle;
 // Distance Reset setup 
 extern double front_sensor_offset;
 extern double left_sensor_offset;

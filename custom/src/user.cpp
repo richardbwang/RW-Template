@@ -37,16 +37,16 @@ void update_Pos(){
 }
 
 void runAutonomous() {
-  int auton_selected = 1;
+  int auton_selected = 2;
   switch(auton_selected) {
     case 1:
       exampleAuton();
       break;
     case 2:
-      exampleAuton2();
+      Right_Side7Wing();
       break;  
     case 3:
-      //redGoalRush();
+      Right_SAWP();
       break;
     case 4:
       break; 
@@ -71,7 +71,7 @@ bool button_up_arrow, button_down_arrow, button_left_arrow, button_right_arrow;
 int chassis_flag = 0;
 
 void runDriver() {
-
+   // Max change in output per 10ms (0.02 is 20ms, multiplied by max voltage)
   inertial_sensor.calibrate();
 
   // Wait for the Inertial Sensor to calibrate
@@ -88,20 +88,24 @@ void runDriver() {
     thread odom = thread(trackNoOdomWheel);
   }
   drawTeamGUI();
-  stopChassis(coast);
   heading_correction = false;
   bool index_toggle = false;
   bool last_l1 = false;
   bool last_l2 = false;
   bool last_up = false;
   bool last_a = false;
+  bool last_x = false;
   bool last_down = false;
   bool last_left = false;
 
   int gui_timer = 0;
+  left_chassis.setStopping(coast);
+  right_chassis.setStopping(coast);
 
 
   while (true) {
+    left_chassis.setStopping(coast);
+    right_chassis.setStopping(coast);
     // [-100, 100] for controller stick axis values
     ch1 = controller_1.Axis1.value();
     ch2 = controller_1.Axis2.value();
@@ -136,31 +140,34 @@ void runDriver() {
       matchloader.set(!matchloader.value());
     }
     last_a = button_a;
+  
 
-    if(button_down_arrow && !last_down) {
+
+    if(l1 && !last_l1) {
       descorer.set(!descorer.value());
     }
-    last_down = button_down_arrow;
+    last_l1 = l1;
 
     if (l2 && !last_l2) {
-      index_toggle = !index_toggle;
+      middle.set(!middle.value());
+      
     }
     last_l2 = l2;
 
     if (r1) {
-      first_intake.spin(fwd, 120, volt);
-      flaps.spin(fwd, 120, volt);
+      first_intake.spin(fwd, 100, volt);
+      flaps.spin(fwd, 100, volt);
       if (index_toggle) {
-        end_roll.spin(fwd, 120, volt);
+        end_roll.spin(fwd, 100, volt);
       } else {
-        end_roll.spin(reverse, 120, volt);
+        end_roll.spin(reverse, 100, volt);
       }
     } 
     else if (r2) {
-      first_intake.spin(reverse, 120, volt);
-      flaps.spin(reverse, 120, volt);
+      first_intake.spin(reverse, 100, volt);
+      flaps.spin(reverse, 100, volt);
       if (index_toggle) {
-        end_roll.spin(reverse, 120, volt);
+        end_roll.spin(reverse, 100, volt);
       } else {
         end_roll.stop(coast);
       }
@@ -173,15 +180,25 @@ void runDriver() {
 
     // default tank drive or replace it with your preferred driver code here: 
 
-    double forward = ch3 * 0.3;
-    double turn = ch1 * 0.35;   // stronger turn response than forward
 
+    double forward = ch3;
+    double turn = ch1;
 
-    double left = forward + turn;
-    double right = forward - turn;
+// Cubing the input makes it much smoother for small adjustments
+  //double forward_expo = (forward_raw * forward_raw * forward_raw) / 10000.0;
+  //double turn_expo = (turn_raw * turn_raw * turn_raw) / 10000.0;
 
-    driveChassis(left, right);
-  
+  double left = (ch3 * 0.24) + (ch1 * 0.31);
+  double right = (ch3 * 0.24) - (ch1 * 0.31);
+
+    //double left = ch3*0.3;
+    //double right = ch2*0.3;
+
+    if (forward == 0 && turn == 0) {
+      stopChassis(coast);
+    } else {
+      driveChassis(left, right);
+    }
 
     wait(8, msec); 
   }

@@ -26,7 +26,7 @@ motor right_chassis3 = motor(PORT12, ratio18_1, false);
 motor_group right_chassis = motor_group(right_chassis1, right_chassis2, right_chassis3);
 
 motor end_roll = motor(PORT21, ratio18_1, false);
-motor flaps = motor(PORT2, ratio18_1, false);
+motor flaps = motor(PORT8, ratio18_1, false);
 motor first_intake = motor(PORT4, ratio18_1, false);
 
 
@@ -35,6 +35,7 @@ optical optical_sensor = optical(PORT17);
 digital_out hood = digital_out(Brain.ThreeWirePort.A);
 digital_out matchloader = digital_out(Brain.ThreeWirePort.B);
 digital_out descorer = digital_out(Brain.ThreeWirePort.C);
+digital_out middle = digital_out(Brain.ThreeWirePort.E);
 
 // Format is rotation(port, reversed)
 // just set these to random ports if you don't use tracking wheels
@@ -78,8 +79,8 @@ double wheel_distance_in = (36.0 / 48.0) * 3.25 * M_PI;
 // distance_* : Linear PID for straight driving
 // turn_*     : PID for turning in place
 // heading_correction_* : PID for heading correction during linear movement
-double distance_kp = 1, distance_ki = 0.0, distance_kd = 7.5;
-double turn_kp = 1.0, turn_ki = 0, turn_kd = 9;
+double distance_kp = 1, distance_ki = 0.0, distance_kd = 7.9;
+double turn_kp = 1.0, turn_ki = 0, turn_kd = 6.3;
 double heading_correction_kp = 0.15, heading_correction_ki = 0.0, heading_correction_kd = 0.8;
 
 // Enable or disable the use of tracking wheels
@@ -119,13 +120,13 @@ bool heading_correction = true; // Use heading correction when the bot is statio
 bool dir_change_start = true;   // Less accel/decel due to expecting direction change at start of movement
 bool dir_change_end = true;     // Less accel/decel due to expecting direction change at end of movement
 
-double min_output = 15; // Minimum output voltage to motors while chaining movements
+double min_output = 10; // Minimum output voltage to motors while chaining movements
 
 // Maximum allowed change in voltage output per 10 msec during movement
-double max_slew_accel_fwd = 10;
-double max_slew_decel_fwd = 10;
-double max_slew_accel_rev = 10;
-double max_slew_decel_rev = 10;
+double max_slew_accel_fwd = 80;
+double max_slew_decel_fwd = 80;
+double max_slew_accel_rev = 80;
+double max_slew_decel_rev = 80;
 
 // Prevents too much slipping during boomerang movements
 // Decrease if there is too much drifting and inconsistency during boomerang

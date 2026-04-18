@@ -6,6 +6,7 @@
 #include <thread>
 
 #include "../include/autonomous.h"
+#include "../custom/include/robot-config.h"
 #include "motor-control.h"
 
 // IMPORTANT: Remember to add respective function declarations to custom/include/autonomous.h
@@ -24,18 +25,108 @@ void exampleAuton() {
   //driveTo(-24, 1000, true, 100);
 }
 
-void exampleAuton2() {
-  moveToPoint(0, 33, 1, 1000, true, 100);
-  turnToAngle(90, 1000);
-  moveToPoint(25, 33, 1, 1000, true, 100);
-  moveToPoint(-25, 33, -1, 1500, true, 5);
+void intake(){
+  first_intake.spin(fwd, 120, volt);
+  flaps.spin(fwd, 120, volt);
+}
+
+void outtake(){
+  first_intake.spin(reverse, 100, volt);
+  flaps.spin(reverse, 100, volt);
+  end_roll.spin(reverse, 100, volt);
+}
+
+
+void setPose(double x, double y, double theta) {
+  x_pos = x;
+  y_pos = y;
+  correct_angle = theta;
+  inertial_sensor.setRotation(theta, degrees);
+}
+
+
+
+void Right_Side7Wing() {
+  //matchloader.set(true);
+  hood.set(true);
+  matchloader.set(true);
+  moveToPoint(0, 32, 1, 800, false, 11.5);
+  intake();
+  turnToAngle(90, 700);
+  moveToPoint(22, 32, 1, 800, false, 11.5);
+  wait(500, msec);
+  moveToPoint(-27, 31, -1, 700, false, 6.5);
+  hood.set(false);
+  matchloader.set(false);
   wait(1000, msec);
-  // turnToAngle(90, 1000);
-  // wait(1000, msec);
-  moveToPoint(15, 33, 1, 1000, true, 50);
-  turnToAngle(225, 1000);
-  moveToPoint(30, 20, 1, 1000, true, 100);
-  driveTo(20, 1000, true, 100);
+  turnToAngle(180, 700);
+  setPose(0, 0, 0);
+  driveTo(6, 600, true, 15);
+  turnToAngle(45, 600);
+  wait(300, msec);
+  driveTo(8, 600, true, 9);
+  outtake();
+  wait(600, msec);
+  driveTo(-12, 800, true);
+  turnToAngle(90, 700);
+  descorer.set(false);
+  driveTo(18, 800, true);
+
+  //matchloader.set(true);
+  //moveToPoint(-27, 0, 1, 800, true, 100);
+
+
+}
+
+void Right_SAWP() {
+  //matchloader.set(true);
+  hood.set(false);
+  matchloader.set(true);
+  moveToPoint(0, 32.5, 1, 850, false, 11.8);
+  intake();
+  turnToAngle(90, 700);
+  moveToPoint(21.5, 33, 1, 850, false, 11.8);
+  wait(400, msec);
+  moveToPoint(-28, 31, -1, 700, false, 6.5);
+  hood.set(true);
+  matchloader.set(false);
+  wait(1000, msec);
+  turnToAngle(180, 700);
+  hood.set(false);
+  setPose(0, 0, 0);
+
+
+  driveTo(6, 600, true, 15);
+  hood.set(true);
+  matchloader.set(true);
+  wait(400, msec);
+  matchloader.set(false);
+  driveTo(4.2, 700, false, 8);
+  wait(250, msec);
+  matchloader.set(true);
+  wait(400, msec);
+  matchloader.set(false);
+  turnToAngle(-60, 700);
+  driveTo(7.3, 800, false);
+  turnToAngle(-90, 700);
+  driveTo(-6, 700, false, 5);
+  hood.set(true);
+  wait(900, msec);
+  matchloader.set(true);
+  driveTo(15.5, 700, false, 5);
+  wait(400, msec);
+  driveTo(-5, 700, false, 5);
+  turnToAngle(-30, 700);
+  middle.set(true);
+  driveTo(-18, 700, false, 5);
+  wait(400, msec);
+
+  
+
+  //matchloader.set(true);
+  //moveToPoint(-27, 0, 1, 800, true, 100);
+
+
 }
 
 void autonSawp(){

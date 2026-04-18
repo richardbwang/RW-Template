@@ -25,6 +25,7 @@ extern distance left_sensor;
 extern distance right_sensor;
 extern distance back_sensor;
 
+/*
 extern motor arm_motor1;
 extern motor arm_motor2;
 extern motor_group arm_motor;
@@ -35,7 +36,7 @@ extern optical optical_sensor;
 extern distance intake_distance;
 extern distance clamp_distance;
 extern digital_out mogo_mech;
-
+*/
 // USER-CONFIGURABLE PARAMETERS (CHANGE BEFORE USING THIS TEMPLATE)
 extern double distance_between_wheels;
 extern double wheel_distance_in;
@@ -50,15 +51,18 @@ extern double vertical_tracker_dist_from_center;
 extern double horizontal_tracker_diameter;
 extern double vertical_tracker_diameter;
 
-//Distance Reset Setup
-extern double front_sensor_offsetX;
-extern double front_sensor_offsetY;
-extern double left_sensor_offsetX;
-extern double left_sensor_offsetY;
-extern double right_sensor_offsetX;
-extern double right_sensor_offsetY;
-extern double back_sensor_offsetX;
-extern double back_sensor_offsetY;
+extern motor first_intake;
+extern motor end_roll;
+extern motor flaps;
+extern digital_out hood;
+extern digital_out matchloader;
+extern digital_out descorer;
+extern digital_out middle;
+// Distance Reset setup 
+extern double front_sensor_offset;
+extern double left_sensor_offset;
+extern double right_sensor_offset;
+extern double back_sensor_offset;
 
 // Advanced Tuning Parameters
 extern bool heading_correction;

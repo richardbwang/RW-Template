@@ -50,11 +50,15 @@ extern double vertical_tracker_dist_from_center;
 extern double horizontal_tracker_diameter;
 extern double vertical_tracker_diameter;
 
-// Distance Reset setup 
-extern double front_sensor_offset;
-extern double left_sensor_offset;
-extern double right_sensor_offset;
-extern double back_sensor_offset;
+//Distance Reset Setup
+extern double front_sensor_offsetX;
+extern double front_sensor_offsetY;
+extern double left_sensor_offsetX;
+extern double left_sensor_offsetY;
+extern double right_sensor_offsetX;
+extern double right_sensor_offsetY;
+extern double back_sensor_offsetX;
+extern double back_sensor_offsetY;
 
 // Advanced Tuning Parameters
 extern bool heading_correction;

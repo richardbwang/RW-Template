@@ -31,9 +31,9 @@ void intake(){
 }
 
 void outtake(){
-  first_intake.spin(reverse, 100, volt);
-  flaps.spin(reverse, 100, volt);
-  end_roll.spin(reverse, 100, volt);
+  first_intake.spin(reverse, 90, volt);
+  flaps.spin(reverse, 120, volt);
+  end_roll.spin(reverse, 120, volt);
 }
 
 
@@ -44,34 +44,75 @@ void setPose(double x, double y, double theta) {
   inertial_sensor.setRotation(theta, degrees);
 }
 
+void Right_Rush(){
+  
+  hood.set(false);
+  matchloader.set(true);
+  moveToPoint(0, 33, 1, 800, false, 11.5);
+  intake();
+  turnToAngle(90, 700);
+  moveToPoint(21, 33, 1, 700, false, 8);
+  moveToPoint(24, 33.1, 1, 200, false, 12);
+  wait(200, msec);
+  moveToPoint(-25, 33.1, -1, 700, false, 6);
+  hood.set(true);
+  moveToPoint(-28, 33.1, -1, 200, false, 4);
+  matchloader.set(false);
+  wait(1300, msec);
 
+  driveTo(-15, 700, false, 10);
+}
+
+void curve(){
+  hood.set(false);
+  matchloader.set(true);
+  moveToPoint(0, 33, 1, 800, false, 11.5);
+  intake();
+  turnToAngle(90, 700);
+  moveToPoint(20.8, 33, 1, 700, false, 8);
+  moveToPoint(23, 33, 1, 200, false, 10);
+  wait(250, msec);
+  moveToPoint(-25, 33.1, -1, 700, false, 6);
+  hood.set(true);
+  moveToPoint(-28, 33.1, -1, 200, false, 4);
+  matchloader.set(false);
+  wait(1300, msec);
+  setPose(0, 0, 0);
+  curveCircle(-170, -6, 600, true, 8);
+  driveTo(0.15, 100, false, 8);
+  turnToAngle(0, 400);
+  driveTo(-18, 600, true, 10);
+}
 
 void Right_Side7Wing() {
   //matchloader.set(true);
-  hood.set(true);
+  hood.set(false);
   matchloader.set(true);
-  moveToPoint(0, 32, 1, 800, false, 11.5);
+  moveToPoint(0, 33, 1, 800, false, 11.5);
   intake();
   turnToAngle(90, 700);
-  moveToPoint(22, 32, 1, 800, false, 11.5);
-  wait(500, msec);
-  moveToPoint(-27, 31, -1, 700, false, 6.5);
-  hood.set(false);
+  moveToPoint(21, 33, 1, 700, false, 8);
+  moveToPoint(24, 33.1, 1, 200, false, 12);
+  wait(200, msec);
+  moveToPoint(-25, 33.1, -1, 700, false, 6);
+  hood.set(true);
+  moveToPoint(-28, 33.1, -1, 200, false, 4);
   matchloader.set(false);
-  wait(1000, msec);
+  wait(1300, msec);
   turnToAngle(180, 700);
+  hood.set(false);
   setPose(0, 0, 0);
   driveTo(6, 600, true, 15);
-  turnToAngle(45, 600);
-  wait(300, msec);
-  driveTo(8, 600, true, 9);
+  matchloader.set(true);
+  turnToAngle(47, 600);
+  matchloader.set(false);
+  driveTo(9, 600, true, 9);
   outtake();
-  wait(600, msec);
-  driveTo(-12, 800, true);
+  wait(1250, msec);
+  driveTo(-12.5, 700, true, 15);
   turnToAngle(90, 700);
   descorer.set(false);
-  driveTo(18, 800, true);
-
+  driveTo(14, 700, true, 15);
   //matchloader.set(true);
   //moveToPoint(-27, 0, 1, 800, true, 100);
 

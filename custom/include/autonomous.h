@@ -4,5 +4,5 @@ void exampleAuton();
 void Right_Side7Wing();
 void Right_SAWP();
 void redGoalRush();
-void Right_SideRush();
-void Right_7BallLong();
+void Right_Rush();
+void curve();

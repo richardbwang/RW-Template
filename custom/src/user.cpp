@@ -37,7 +37,7 @@ void update_Pos(){
 }
 
 void runAutonomous() {
-  int auton_selected = 2;
+  int auton_selected = 5;
   switch(auton_selected) {
     case 1:
       exampleAuton();
@@ -49,8 +49,10 @@ void runAutonomous() {
       Right_SAWP();
       break;
     case 4:
+      Right_Rush();
       break; 
     case 5:
+      curve();
       break;
     case 6:
       break;

@@ -1291,74 +1291,62 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
  ** - IMPORTANT NOTE FOR THE USER - **
  * - DO NOT CALL THIS FUNCTION DIRECTLY, use the specific direction functions below instead.
  */
-void resetPositionWithSensor(vex::distance& sensor, double sensor_offset, double sensor_angle_offset, double field_half_size) {
+void resetPositionWithSensor(vex::distance& sensor, double s_x, double s_y, double sensor_angle_offset, double field_half_size) {
     double sensorReading = sensor.objectDistance(inches);
   
-    // Check for invalid reading (distance sensors return -1 or very large values when no object detected)
     if (sensorReading < 0 || sensorReading > 200) {
-        Brain.Screen.print("Invalid distance sensor reading: %.2f", sensorReading);
-        return;
+        return; // Don't reset if reading is clearly garbage
     }
     
-    // Get current pose
     double current_heading_deg = getInertialHeading();
-    double robot_heading_deg = current_heading_deg + sensor_angle_offset;
+    double sensor_heading_deg = current_heading_deg + sensor_angle_offset;
     
-    // Normalize heading to 0-360 range
-    int headingDeg = (int)(robot_heading_deg);
-    headingDeg = (headingDeg + 360) % 360;
-    
-    // Determine which wall we're facing and which axis to reset
+    // Normalize to 0–360
+    double heading = fmod(sensor_heading_deg, 360.0);
+    if (heading < 0) heading += 360;
+
     bool resettingX = false;
+    double wallAngle = 0;
     double wallSign = 1.0;
-    
-    if (315 <= headingDeg || headingDeg <= 45) {
-        // Top wall - reset Y position
-        resettingX = false;
-        wallSign = 1.0;
-    }
-    else if (45 < headingDeg && headingDeg <= 135) {
-        // Right wall - reset X position
-        resettingX = true;
-        wallSign = 1.0;
-    }
-    else if (135 < headingDeg && headingDeg <= 225) {
-        // Bottom wall - reset Y position
-        resettingX = false;
-        wallSign = -1.0;
-    }
-    else {
-        // Left wall - reset X position
-        resettingX = true;
-        wallSign = -1.0;
-    }
-    
-    // Calculate distance from wall to robot center
-    double wallToCenter = sensorReading + sensor_offset;
-    
-    // Calculate actual position
-    double actualPos = wallSign * (field_half_size - wallToCenter);
-    
-    // Update position (only reset the appropriate axis)
+
+    // Identify which wall we are looking at
+    if (heading <= 45 || heading >= 315)      { resettingX = false; wallAngle = 0;   wallSign = 1.0; }  // North (+Y)
+    else if (heading > 45 && heading <= 135)  { resettingX = true;  wallAngle = 90;  wallSign = 1.0; }  // East (+X)
+    else if (heading > 135 && heading <= 225) { resettingX = false; wallAngle = 180; wallSign = -1.0; } // South (-Y)
+    else                                      { resettingX = true;  wallAngle = 270; wallSign = -1.0; } // West (-X)
+
+    // Calculate the perpendicular distance from sensor to wall
+    double angleErrorRad = (heading - wallAngle) * M_PI / 180.0;
+    double perpendicularDistance = sensorReading * cos(angleErrorRad);
+
+    // Convert robot heading to radians
+    double thetaRad = current_heading_deg * M_PI / 180.0;
+    double rotatedOffset;
+
     if (resettingX) {
-        x_pos = actualPos;
-
+        // Contribution of the sensor's X/Y physical position to the X-axis distance
+        rotatedOffset = (s_x * cos(thetaRad)) + (s_y * sin(thetaRad));
     } else {
-        y_pos = actualPos;
-
+        // Contribution of the sensor's X/Y physical position to the Y-axis distance
+        rotatedOffset = (-s_x * sin(thetaRad)) + (s_y * cos(thetaRad));
     }
+
+    // Final Position Calculation
+    double wallToCenter = perpendicularDistance + (wallSign * rotatedOffset);
+    double actualPos = wallSign * (field_half_size - wallToCenter);
+
+    if (resettingX) x_pos = actualPos; else y_pos = actualPos;
 }
 
 /*
  * resetPositionFront
  * Resets position using the front distance sensor.
- * Remember to only use these when perpendicular to the wall!
  * - sensor: Front distance sensor
  * - sensor_offset: Distance offset of the sensor from robot center (in inches)
  * - field_half_size: Half the field dimension (distance from center to wall, in inches)
  */
 void resetPositionFront() {
-    resetPositionWithSensor(front_sensor, front_sensor_offset, 0.0, field_half_size);
+    resetPositionWithSensor(front_sensor, front_sensor_offsetX, front_sensor_offsetY, 0.0, field_half_size);
 }
 
 /*
@@ -1369,32 +1357,32 @@ void resetPositionFront() {
  * - sensor_offset: Distance offset of the sensor from robot center (in inches)
  * - field_half_size: Half the field dimension (distance from center to wall, in inches)
  */
+
 void resetPositionBack() {
-    resetPositionWithSensor(back_sensor, back_sensor_offset, 180.0, field_half_size);
+    resetPositionWithSensor(back_left, back_sensor_offsetX, back_sensor_offsetY, 180.0, field_half_size);
 }
+   
 
 /*
  * resetPositionLeft
  * Resets position using the left distance sensor.
- * Remember to only use these when perpendicular to the wall!
  * - sensor: Left distance sensor
  * - sensor_offset: Distance offset of the sensor from robot center (in inches)
  * - field_half_size: Half the field dimension (distance from center to wall, in inches)
  */
 void resetPositionLeft() {
-    resetPositionWithSensor(left_sensor, left_sensor_offset, 270.0, field_half_size);
+    resetPositionWithSensor(left_sensor, left_sensor_offsetX, left_sensor_offsetY, 270.0, field_half_size);
 }
 
 /*
  * resetPositionRight
  * Resets position using the right distance sensor.
- * Remember to only use these when perpendicular to the wall!
  * - sensor: Right distance sensor
  * - sensor_offset: Distance offset of the sensor from robot center (in inches)
  * - field_half_size: Half the field dimension (distance from center to wall, in inches)
  */
 void resetPositionRight() {
-    resetPositionWithSensor(right_sensor, right_sensor_offset, 90.0, field_half_size);
+    resetPositionWithSensor(right_sensor, right_sensor_offsetX, right_sensor_offsetY, 90.0, field_half_size);
 }
 
 // ============================================================================

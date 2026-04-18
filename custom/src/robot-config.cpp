@@ -97,18 +97,25 @@ double horizontal_tracker_diameter = 1.975; // Diameter of the horizontal tracke
 double vertical_tracker_diameter = 1.975; // Diameter of the vertical tracker wheel (in inches)
 
 // Distance Reset setup
-// Set all of these values to the distance from the respective distance sensor to the robot's center along the axis it faces(in inches)
-// The front sensor offset is the distance from the front distance sensor to the robot center along the Y axis
-// The back sensor offset is the distance from the back distance sensor to the robot center along the Y axis
-// The left sensor offset is the distance from the left distance sensor to the robot center along the X axis
-// The right sensor offset is the distance from the right distance sensor to the robot center along the X axis
-// All values should be positive numbers
 // If you are not using all four distance sensors, just set the unused ones to 0
 // If you are not using distance resets these values will be ignored
-double front_sensor_offset = 0.0;
-double left_sensor_offset = 0.0;
-double right_sensor_offset = 0.0;
-double back_sensor_offset = 0.0;
+// Add your sensor offsets here
+// If a sensor is dead-center but 6.5" forward relative to the robot's center:
+// double front_sensor_offsetX = 0.0; 
+// double front_sensor_offsetY = 6.5;
+// For the X offset, a negative value indicates that the sensor is located on the left side of the robot, while a positive value indicates that it is on the right side. 
+
+double front_sensor_offsetX = 0.0; 
+double front_sensor_offsetY = 0.0;
+
+double left_sensor_offsetX = 0.0; 
+double left_sensor_offsetY = 0.0;
+
+double right_sensor_offsetX = 0.0;
+double right_sensor_offsetY = 0.0;
+
+double back_sensor_offsetX = 0.0;
+double back_sensor_offsetY = 0.0;
 
 // ============================================================================
 // ADVANCED TUNING (OPTIONAL)

@@ -92,6 +92,7 @@ double vertical_tracker_diameter = 1.975; // Diameter of the vertical tracker wh
 // If a sensor is dead-center but 6.5" forward relative to the robot's center:
 // double front_sensor_offsetX = 0.0; 
 // double front_sensor_offsetY = 6.5;
+// For the X offset, a negative value indicates that the sensor is located on the left side of the robot, while a positive value indicates that it is on the right side. 
 
 double front_sensor_offsetX = 0.0; 
 double front_sensor_offsetY = 0.0;

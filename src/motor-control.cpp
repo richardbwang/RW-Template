@@ -939,7 +939,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
     add = 180; // Add 180 degrees if turning to face backward
   }
   // Calculate target angle using atan2 and normalize
-  double turn_angle = normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos))) + add;
+  double turn_angle = normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add);
   PID pid = PID(turn_kp, turn_ki, turn_kd);
 
   pid.setTarget(turn_angle); // Set PID target
@@ -966,7 +966,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
   int index = 1;
   while (!pid.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec) {
     // Continuously update target as robot moves
-    pid.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos))) + add);
+    pid.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add));
     current_heading = getInertialHeading();
     output = pid.update(current_heading);
 

@@ -1359,7 +1359,7 @@ void resetPositionFront() {
  */
 
 void resetPositionBack() {
-    resetPositionWithSensor(back_left, back_sensor_offsetX, back_sensor_offsetY, 180.0, field_half_size);
+    resetPositionWithSensor(back_sensor, back_sensor_offsetX, back_sensor_offsetY, 180.0, field_half_size);
 }
    
 

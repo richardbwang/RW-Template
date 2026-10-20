@@ -71,6 +71,22 @@ extern double max_slew_accel_rev;
 extern double max_slew_decel_rev;
 extern double chase_power;
 
+// Newer Settings
+extern double imu_scale;
+extern double stall_exit_msec;
+extern double distance_reset_max_angle;
+extern double distance_reset_max_jump;
+extern double distance_reset_corner_margin;
+extern int mcl_particles;
+extern double mcl_max_range;
+extern double distance_sensor_delay_msec;
+extern double distance_sensor_scale;
+extern double drive_kS, drive_kV, drive_kA, drive_motor_rpm;
+extern double profile_max_speed, profile_max_accel, profile_turn_speed, profile_turn_accel;
+extern double path_lookahead, path_max_lateral_accel;
+extern double driver_curve;
+extern double driver_deadband;
+
 /**
  * Used to initialize code/tasks/devices added using tools in VEXcode Pro.
  * 

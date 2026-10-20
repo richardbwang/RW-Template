@@ -16,6 +16,9 @@ controller controller_1 = controller(primary);
 // gearSetting is one of the following: ratio36_1(red), ratio18_1(green), ratio6_1(blue)
 // all chassis motors should be reversed appropriately so that they spin vertical when given a positive voltage input
 // such as driveChassis(12, 12)
+// Override (2026-27) rule R11 caps drivetrain motors at 55W total, e.g. 4 x 11W, 5 x 11W, or 4 x 11W + 2 x 5.5W.
+// Drive encoder readings come from the FIRST motor in each motor_group, so with mixed motors
+// list an 11W motor first and set wheel_distance_in for that motor's gearing.
 motor left_chassis1 = motor(PORT1, ratio6_1, true);
 motor left_chassis2 = motor(PORT2, ratio6_1, true);
 motor left_chassis3 = motor(PORT3, ratio6_1, false);
@@ -88,7 +91,7 @@ double vertical_tracker_diameter = 1.975; // Diameter of the vertical tracker wh
 // Distance Reset setup
 // If you are not using all four distance sensors, just set the unused ones to 0
 // If you are not using distance resets these values will be ignored
-// Add your sensor offsets here
+// Add your sensor offsets here (where the sensor's face is, relative to the robot's center)
 // If a sensor is dead-center but 6.5" forward relative to the robot's center:
 // double front_sensor_offsetX = 0.0; 
 // double front_sensor_offsetY = 6.5;
@@ -128,6 +131,63 @@ double max_slew_decel_rev = 24;
 // Decrease if there is too much drifting and inconsistency during boomerang
 // Increase for more speed during boomerang
 double chase_power = 2;
+
+// ============================================================================
+// NEWER SETTINGS (OPTIONAL)
+// Every setting here works at its default. Change one only when you use the feature it's for.
+// These also have defaults in the core files, so custom folders without them still build.
+// ============================================================================
+
+// Multiplies the IMU heading. Many V5 IMUs read a little off over full turns (e.g. 357 for 360).
+// Find yours with measureImuScale(), 1.0 = no correction
+double imu_scale = 1.0;
+
+// End a motion early once the robot has been stuck (not moving or turning) for this long, in msec.
+// Saves time if the robot gets caught on something. 0 = off.
+// Leave it off for moves meant to push into something until they time out. 350 or more avoids false exits.
+double stall_exit_msec = 0;
+
+// Distance resets: skip readings where the beam hits the wall at a steeper angle than this (degrees).
+// The sensor's beam is a cone about 12 degrees wide on each side, so steep readings get less exact
+double distance_reset_max_angle = 30;
+// Distance resets: skip readings that would move the position more than this (inches, 0 = off).
+// 6-10 helps ignore other robots and game elements in front of the wall
+double distance_reset_max_jump = 0;
+// Distance resets: skip readings that hit the wall this close to a corner (inches, 0 = off).
+// For Override, about 18 keeps the corner loaders out of the readings
+double distance_reset_corner_margin = 0;
+
+// MCL (see startMcl() in custom/src/user.cpp): particle count (more = smoother but slower, up to 1000),
+// longest distance reading it trusts (inches), and how far behind the distance sensor readings are (msec).
+// If the position lags while driving toward or away from a wall, adjust the delay.
+// The selector screen shows how long each MCL update takes; lower the particle count if it's more than a few msec
+int mcl_particles = 200;
+double mcl_max_range = 60;
+double distance_sensor_delay_msec = 40;
+
+// Multiplies every distance sensor reading (resets and MCL). V5 distance sensors often read 1-3% long.
+// To measure yours: put the robot a tape-measured distance from a wall (2-4 ft), then use
+// (measured distance) / (what the sensor reads). 1.0 = no correction
+double distance_sensor_scale = 1.0;
+
+// Motion profiles and path following (driveProfiled, turnProfiled, followPath, followPathRamsete).
+// These use a model of your drive: drive_kS = volts to start moving, drive_kV = volts per in/s,
+// drive_kA = volts per in/s^2. Leave kV and kA at 0 to estimate them from drive_motor_rpm and
+// wheel_distance_in, or measure all three with measureDriveFeedforward()
+double drive_kS = 0.5;
+double drive_kV = 0;
+double drive_kA = 0;
+double drive_motor_rpm = 600;          // Drive motor cartridge: 600 (blue), 200 (green), 100 (red)
+double profile_max_speed = 0;          // Top speed (in/s, 0 = 80% of the drive's top speed)
+double profile_max_accel = 100;        // Speed up / slow down rate (in/s^2): lower if the wheels slip
+double profile_turn_speed = 360;       // turnProfiled top speed (degrees/s)
+double profile_turn_accel = 1200;      // turnProfiled acceleration (degrees/s^2)
+double path_lookahead = 12;            // Pure pursuit lookahead (inches): bigger = smoother, smaller = tighter
+double path_max_lateral_accel = 120;   // Slows down in curves so the robot doesn't slide (in/s^2)
+
+// Driver control feel, used by driverTank() and driverArcade()
+double driver_curve = 0;     // 0 = linear, higher = finer control at low stick values (2-6 is typical)
+double driver_deadband = 3;  // Stick values below this (percent) count as zero
 
 // ============================================================================
 // DO NOT CHANGE ANYTHING BELOW

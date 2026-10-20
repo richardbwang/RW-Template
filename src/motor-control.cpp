@@ -4,6 +4,7 @@
 #include <ctime>
 #include <cmath>
 #include "motor-control.h"
+#include "mcl.h"
 #include "../custom/include/autonomous.h"
 #include "../custom/include/robot-config.h"
 
@@ -16,6 +17,40 @@ double x_pos = 0, y_pos = 0;
 double correct_angle = 0;
 // Field config for distance resets, DO NOT CHANGE
 double field_half_size = 70.25;  // Half field size in inches
+
+// Odometry extras: total distance driven (for waitUntilTraveled) and current speeds (for stall exits)
+double odom_traveled_in = 0;
+double odom_speed_ips = 0, odom_turn_rate_dps = 0;
+bool odom_resync = false;
+// Raw odometry movement, never changed by resets or MCL (MCL uses it to move its particles)
+double odom_motion_x = 0, odom_motion_y = 0;
+
+// MCL state (see runMcl)
+bool mcl_running = false, mcl_recenter = false;
+double mcl_x = 0, mcl_y = 0, mcl_spread = 0;
+double mcl_cycle_msec = 0; // How long each MCL update takes on the Brain
+
+// Motion state shared by the motion functions and the async/wait helpers
+bool motion_running = false, async_running = false, motion_cancel_requested = false;
+double motion_start_traveled_in = 0, motion_start_heading = 0;
+double stall_start_time = -1;
+int32_t async_thread_id = -1;
+void (*async_motion)() = nullptr;
+
+// ============================================================================
+// NEWER SETTINGS (DEFAULTS)
+// These have defaults here so custom folders from older versions still build.
+// To change one, define it again in custom/src/robot-config.cpp, e.g. "double imu_scale = 1.0035;"
+// ============================================================================
+RW_DEFAULT double imu_scale = 1.0;                 // Multiplies the IMU reading, see measureImuScale()
+RW_DEFAULT double stall_exit_msec = 0;             // End a motion after the robot is stuck this long (0 = off)
+RW_DEFAULT double distance_reset_max_angle = 30;   // Skip distance resets when the beam hits the wall at a steeper angle (degrees)
+RW_DEFAULT double distance_reset_max_jump = 0;     // Skip distance resets that move the position more than this (inches, 0 = off)
+RW_DEFAULT double distance_reset_corner_margin = 0; // Skip distance resets that hit the wall this close to a corner (inches, 0 = off)
+RW_DEFAULT int mcl_particles = 200;                // MCL particle count (more = smoother but slower, up to 1000)
+RW_DEFAULT double mcl_max_range = 60;              // MCL ignores distance readings longer than this (inches)
+RW_DEFAULT double distance_sensor_delay_msec = 40; // How far behind the distance sensor readings are (msec)
+RW_DEFAULT double distance_sensor_scale = 1.0;     // Multiplies distance readings (V5 sensors often read 1-3% long)
 
 // ============================================================================
 // CHASSIS CONTROL FUNCTIONS
@@ -82,12 +117,11 @@ double normalizeTarget(double angle) {
 }
 
 /*
- * Returns the current inertial sensor heading in degrees.
- * - normalize: If true, normalizes the heading (not used in this implementation).
+ * Returns the current inertial sensor heading in degrees, corrected by imu_scale.
  */
 double getInertialHeading() {
   // Get inertial sensor rotation in degrees
-  return inertial_sensor.rotation(degrees);
+  return inertial_sensor.rotation(degrees) * imu_scale;
 }
 
 // ============================================================================
@@ -141,6 +175,206 @@ void scaleToMax(double& left_output, double& right_output, double max_output) {
 }
 
 // ============================================================================
+// MOTION LIFECYCLE, ASYNC MOTIONS, AND WAIT HELPERS
+// ============================================================================
+
+/*
+ * beginMotion / endMotion
+ * Called at the start and end of every motion function. They track what is running
+ * for the wait helpers, cancelMotion(), stall exits, and correctHeading().
+ */
+void beginMotion() {
+  // A regular motion started while an async motion is still running waits for it,
+  // so two motions never fight over the drivetrain
+  if (async_running && vex::this_thread::get_id() != async_thread_id) {
+    waitForMotion();
+  }
+  motion_running = true;
+  is_turning = true;
+  motion_cancel_requested = false;
+  motion_start_traveled_in = odom_traveled_in;
+  motion_start_heading = getInertialHeading();
+  stall_start_time = -1;
+}
+
+void endMotion() {
+  motion_running = false;
+  is_turning = false;
+}
+
+/*
+ * motionActive
+ * Loop condition shared by every motion. Returns false once the motion times out,
+ * is cancelled with cancelMotion(), or (when stall_exit_msec > 0) has been stuck that long.
+ * - start_time: Brain.timer(msec) when the motion started.
+ * - time_limit_msec: Maximum time allowed for the motion (in milliseconds).
+ */
+bool motionActive(double start_time, double time_limit_msec) {
+  double now = Brain.timer(msec);
+  if (now - start_time > time_limit_msec || motion_cancel_requested) {
+    return false;
+  }
+  // Stall exit: ignore the first 300 msec while the robot gets moving
+  if (stall_exit_msec > 0 && now - start_time > 300) {
+    bool stopped = odom_speed_ips < 1.5 && odom_turn_rate_dps < 10;
+    if (!stopped) {
+      stall_start_time = -1;
+    } else if (stall_start_time < 0) {
+      stall_start_time = now;
+    } else if (now - stall_start_time >= stall_exit_msec) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/*
+ * asyncMotionThread
+ * Thread body for runAsync(). Runs the queued motion, then marks the async slot free.
+ */
+void asyncMotionThread() {
+  async_thread_id = vex::this_thread::get_id();
+  async_motion();
+  async_running = false;
+}
+
+/*
+ * runAsync
+ * Runs a motion (or a few chained motions) in the background so your autonomous
+ * code keeps going. Only one async motion runs at a time: if one is still running,
+ * this waits for it to finish first. A regular motion called while an async one
+ * is running also waits for it.
+ * - motion: Function to run, usually a lambda such as []{ moveToPoint(24, 48, 1, 2000); }
+ *
+ * Example:
+ *   runAsync([]{ moveToPoint(24, 48, 1, 2000); });
+ *   waitUntilTraveled(20);             // 20 inches into the move...
+ *   intake_motor.spin(fwd, 12, volt);  // ...start the intake
+ *   waitForMotion();
+ */
+void runAsync(void (*motion)()) {
+  // Called from inside an async motion: just run it here instead of waiting on ourselves
+  if (async_running && vex::this_thread::get_id() == async_thread_id) {
+    motion();
+    return;
+  }
+  waitForMotion();
+  async_motion = motion;
+  async_running = true;
+  // Start the progress counters now so wait helpers called right after this measure from here
+  motion_start_traveled_in = odom_traveled_in;
+  motion_start_heading = getInertialHeading();
+  vex::thread async_thread = vex::thread(asyncMotionThread);
+}
+
+/*
+ * waitForMotion
+ * Blocks until no motion is running (async or regular).
+ */
+void waitForMotion() {
+  // Inside an async motion, its own motions run one after another, so there's nothing to wait for
+  if (async_running && vex::this_thread::get_id() == async_thread_id) {
+    return;
+  }
+  while (async_running || motion_running) {
+    wait(10, msec);
+  }
+}
+
+/*
+ * waitUntilTraveled
+ * Blocks until the running motion has driven this far (path length, inches), or it ends.
+ * Distance is measured from the start of the motion that is currently running.
+ * - distance_in: Distance to wait for (in inches).
+ */
+void waitUntilTraveled(double distance_in) {
+  while ((async_running || motion_running) && odom_traveled_in - motion_start_traveled_in < distance_in) {
+    wait(10, msec);
+  }
+}
+
+/*
+ * waitUntilTurned
+ * Blocks until the running motion has turned this many degrees (either way), or it ends.
+ * - angle_deg: Amount of turning to wait for (in degrees).
+ */
+void waitUntilTurned(double angle_deg) {
+  while ((async_running || motion_running) && fabs(getInertialHeading() - motion_start_heading) < angle_deg) {
+    wait(10, msec);
+  }
+}
+
+/*
+ * waitUntilNear
+ * Blocks until the robot is within radius_in of (x, y), or the running motion ends.
+ * - x, y: Field point (in inches).
+ * - radius_in: How close counts as "near" (in inches).
+ */
+void waitUntilNear(double x, double y, double radius_in) {
+  while ((async_running || motion_running) && hypot(x - x_pos, y - y_pos) > radius_in) {
+    wait(10, msec);
+  }
+}
+
+/*
+ * cancelMotion
+ * Ends the motion that is currently running, as if it had timed out (it still brakes if exit is true).
+ * Call it from another thread or after a wait helper, e.g. to stop driving once a sensor sees an object.
+ */
+void cancelMotion() {
+  motion_cancel_requested = true;
+}
+
+/*
+ * isMotionRunning
+ * Returns true while a motion (async or regular) is running.
+ */
+bool isMotionRunning() {
+  return async_running || motion_running;
+}
+
+/*
+ * setPose
+ * Sets the robot's position and heading, e.g. at the start of autonomous.
+ * Safe to call while odometry is running.
+ * - x, y: Robot position (in inches).
+ * - heading_deg: Robot heading (in degrees, 0 faces +Y, clockwise positive).
+ */
+void setPose(double x, double y, double heading_deg) {
+  inertial_sensor.setRotation(heading_deg / imu_scale, degrees);
+  x_pos = x;
+  y_pos = y;
+  correct_angle = heading_deg;
+  // Tell the odometry thread not to count the heading jump as a turn, and restart MCL here
+  odom_resync = true;
+  mcl_recenter = true;
+}
+
+/*
+ * measureImuScale
+ * Helper for tuning imu_scale. Run it (e.g. from runDriver), line the robot up with a tile edge,
+ * spin it by hand exactly `turns` full turns clockwise, and line it up again. The Brain screen
+ * shows the scale to put in custom/src/robot-config.cpp. Never returns.
+ * - turns: Number of full turns you will spin the robot (more turns = more accurate, 5-10 is good).
+ */
+void measureImuScale(int turns) {
+  inertial_sensor.setRotation(0, degrees);
+  Brain.Screen.clearScreen();
+  while (true) {
+    double raw = inertial_sensor.rotation(degrees);
+    Brain.Screen.setCursor(1, 1);
+    Brain.Screen.print("Spin the robot %d full turns clockwise", turns);
+    Brain.Screen.setCursor(2, 1);
+    Brain.Screen.print("IMU reads: %.2f deg (should be %d)     ", raw, turns * 360);
+    Brain.Screen.setCursor(3, 1);
+    if (fabs(raw) > 90) {
+      Brain.Screen.print("imu_scale = %.5f     ", turns * 360.0 / raw);
+    }
+    wait(50, msec);
+  }
+}
+
+// ============================================================================
 // MAIN DRIVE AND TURN FUNCTIONS
 // ============================================================================
 
@@ -154,7 +388,7 @@ void scaleToMax(double& left_output, double& right_output, double max_output) {
 void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double max_output) {
   // Prepare for turn
   stopChassis(vex::brakeType::coast);
-  is_turning = true;
+  beginMotion();
   double threshold = 1;
   PID pid = PID(turn_kp, turn_ki, turn_kd);
 
@@ -182,7 +416,7 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
   int index = 1;
   if(exit == false && correct_angle < turn_angle) {
     // Turn right without stopping at end
-    while (getInertialHeading() < turn_angle && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (getInertialHeading() < turn_angle && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading); // PID update for heading
       // Draw heading trace
@@ -198,7 +432,7 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
     }
   } else if(exit == false && correct_angle > turn_angle) {
     // Turn left without stopping at end
-    while (getInertialHeading() > turn_angle && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (getInertialHeading() > turn_angle && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
       Brain.Screen.drawLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier));
@@ -212,7 +446,7 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
     }
   } else {
     // Standard PID turn
-    while (!pid.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (!pid.targetArrived() && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
       Brain.Screen.drawLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier));
@@ -228,7 +462,7 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
     stopChassis(vex::hold);
   }
   correct_angle = turn_angle;
-  is_turning = false;
+  endMotion();
 }
 
 /*
@@ -242,7 +476,7 @@ void driveTo(double distance_in, double time_limit_msec, bool exit, double max_o
   // Store initial encoder values
   double start_left = getLeftRotationDegree(), start_right = getRightRotationDegree();
   stopChassis(vex::brakeType::coast);
-  is_turning = true;
+  beginMotion();
   double threshold = 0.5;
   int drive_direction = distance_in > 0 ? 1 : -1;
   double max_slew_fwd = drive_direction > 0 ? max_slew_accel_fwd : max_slew_decel_rev;
@@ -290,7 +524,7 @@ void driveTo(double distance_in, double time_limit_msec, bool exit, double max_o
   double current_distance = 0, current_angle = 0;
 
   // Main PID loop for driving straight
-  while (((!pid_distance.targetArrived()) && Brain.timer(msec) - start_time <= time_limit_msec && exit) || (exit == false && current_distance < distance_in && Brain.timer(msec) - start_time <= time_limit_msec)) {
+  while (((!pid_distance.targetArrived()) && motionActive(start_time, time_limit_msec) && exit) || (exit == false && current_distance < distance_in && motionActive(start_time, time_limit_msec))) {
     // Calculate current distance and heading
     current_distance = (fabs(((getLeftRotationDegree() - start_left) / 360.0) * wheel_distance_in) + fabs(((getRightRotationDegree() - start_right) / 360.0) * wheel_distance_in)) / 2;
     current_angle = getInertialHeading();
@@ -336,7 +570,7 @@ void driveTo(double distance_in, double time_limit_msec, bool exit, double max_o
     prev_right_output = 0;
     stopChassis(vex::hold);
   }
-  is_turning = false;
+  endMotion();
 }
 
 /*
@@ -365,7 +599,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
   ratio = in_arc / out_arc;
 
   stopChassis(vex::brakeType::coast);
-  is_turning = true;
+  beginMotion();
   double threshold = 0.5;
 
   // Determine curve and drive direction
@@ -424,7 +658,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
   // Main control loop for each curve/exit configuration
   if (curve_direction == -1 && exit == true) {
     // Left curve, stop at end
-    while (!pid_out.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (!pid_out.targetArrived() && motionActive(start_time, time_limit_msec)) {
       current_angle = getInertialHeading();
       current_right = fabs(((getRightRotationDegree() - start_right) / 360.0) * wheel_distance_in);
       // Calculate the real angle along the arc
@@ -451,7 +685,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
     }
   } else if (curve_direction == 1 && exit == true) {
     // Right curve, stop at end
-    while (!pid_out.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (!pid_out.targetArrived() && motionActive(start_time, time_limit_msec)) {
       current_angle = getInertialHeading();
       current_left = fabs(((getLeftRotationDegree() - start_left) / 360.0) * wheel_distance_in);
       real_angle = current_left/out_arc * (result_angle_deg - correct_angle) + correct_angle;
@@ -474,7 +708,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
     }
   } else if (curve_direction == -1 && exit == false) {
     // Left curve, chaining (do not stop at end)
-    while (current_right < out_arc && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (current_right < out_arc && motionActive(start_time, time_limit_msec)) {
       current_angle = getInertialHeading();
       current_right = fabs(((getRightRotationDegree() - start_right) / 360.0) * wheel_distance_in);
       real_angle = current_right/out_arc * (result_angle_deg - correct_angle) + correct_angle;
@@ -497,7 +731,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
     }
   } else {
     // Right curve, chaining (do not stop at end)
-    while (current_left < out_arc && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (current_left < out_arc && motionActive(start_time, time_limit_msec)) {
       current_angle = getInertialHeading();
       current_left = fabs(((getLeftRotationDegree() - start_left) / 360.0) * wheel_distance_in);
       real_angle = current_left/out_arc * (result_angle_deg - correct_angle) + correct_angle;
@@ -525,7 +759,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
   }
   // Update the global heading
   correct_angle = result_angle_deg;
-  is_turning = false;
+  endMotion();
 }
 
 /*
@@ -539,7 +773,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
  */
 void swing(double swing_angle, double drive_direction, double time_limit_msec, bool exit, double max_output) {
   stopChassis(vex::brakeType::coast); // Stop chassis before starting swing
-  is_turning = true;                  // Set turning state
+  beginMotion();
   double threshold = 1;
   PID pid = PID(turn_kp, turn_ki, turn_kd); // Initialize PID for turning
 
@@ -581,7 +815,7 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
   // Swing logic for each case, chaining (exit == false)
   if(choice == 1 && exit == false) {
     // Swing left, forward
-    while (current_heading > swing_angle && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (current_heading > swing_angle && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
 
@@ -603,7 +837,7 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
     }
   } else if(choice == 2 && exit == false) {
     // Swing right, forward
-    while (current_heading < swing_angle && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (current_heading < swing_angle && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
 
@@ -625,7 +859,7 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
     }
   } else if(choice == 3 && exit == false) {
     // Swing left, backward
-    while (current_heading > swing_angle && Brain.timer(msec) - start_time <= time_limit_msec) {
+    while (current_heading > swing_angle && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
 
@@ -647,7 +881,7 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
     }
   } else {
     // Swing right, backward
-    while (current_heading < swing_angle && Brain.timer(msec) - start_time <= time_limit_msec && exit == false) {
+    while (current_heading < swing_angle && motionActive(start_time, time_limit_msec) && exit == false) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
 
@@ -670,7 +904,7 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
   }
 
   // PID loop for exit == true (stop at end)
-  while (!pid.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec && exit == true) {
+  while (!pid.targetArrived() && motionActive(start_time, time_limit_msec) && exit == true) {
     current_heading = getInertialHeading();
     output = pid.update(current_heading);
 
@@ -710,7 +944,7 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
     stopChassis(vex::hold); // Stop chassis at end if required
   }
   correct_angle = swing_angle; // Update global heading
-  is_turning = false;          // Reset turning state
+  endMotion();
 }
 
 /*
@@ -742,185 +976,99 @@ void correctHeading() {
 }
 
 /*
- * trackNoOdomWheel
- * Tracks the robot's position using only drivetrain encoders and inertial sensor.
- * Assumes no external odometry tracking wheels.
+ * runOdometry
+ * Tracks the robot's position (x_pos, y_pos) from the inertial heading plus tracking wheels
+ * and/or drivetrain encoders. Runs forever, so start it in a thread (see startOdometry()).
+ * - use_horizontal: true if a horizontal (sideways) tracking wheel is installed.
+ * - use_vertical: true if a vertical (forward) tracking wheel is installed.
+ *   Without one, the drivetrain encoders measure forward motion instead.
  */
-void trackNoOdomWheel() {
+void runOdometry(bool use_horizontal, bool use_vertical) {
   resetChassis();
-  double prev_heading_rad = 0;
-  double prev_left_deg = 0, prev_right_deg = 0;
-  double delta_local_y_in = 0;
+  // Start from the current readings so a sensor that wasn't at zero doesn't look like movement
+  double prev_heading_deg = getInertialHeading();
+  double prev_left_deg = getLeftRotationDegree(), prev_right_deg = getRightRotationDegree();
+  double prev_horizontal_deg = use_horizontal ? horizontal_tracker.position(degrees) : 0;
+  double prev_vertical_deg = use_vertical ? vertical_tracker.position(degrees) : 0;
+  double prev_time = Brain.timer(msec);
 
   while (true) {
-    double heading_rad = degToRad(getInertialHeading());
+    double heading_deg = getInertialHeading();
     double left_deg = getLeftRotationDegree();
     double right_deg = getRightRotationDegree();
-    double delta_heading_rad = heading_rad - prev_heading_rad; // Change in heading (radians)
-    double delta_left_in = (left_deg - prev_left_deg) * wheel_distance_in / 360.0;   // Left wheel delta (inches)
-    double delta_right_in = (right_deg - prev_right_deg) * wheel_distance_in / 360.0; // Right wheel delta (inches)
-    // If no heading change, treat as straight movement
-    if (fabs(delta_heading_rad) < 1e-6) {
-      delta_local_y_in = (delta_left_in + delta_right_in) / 2.0;
+    double horizontal_deg = use_horizontal ? horizontal_tracker.position(degrees) : 0;
+    double vertical_deg = use_vertical ? vertical_tracker.position(degrees) : 0;
+    double now = Brain.timer(msec);
+
+    if (odom_resync) {
+      // setPose() just moved the pose; skip this step so the jump isn't counted as motion
+      odom_resync = false;
     } else {
-      // Calculate arc movement for each wheel
-      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
-      double delta_local_y_left_in = sin_multiplier * (delta_left_in / delta_heading_rad + distance_between_wheels / 2.0);
-      double delta_local_y_right_in = sin_multiplier * (delta_right_in / delta_heading_rad + distance_between_wheels / 2.0);
-      delta_local_y_in = (delta_local_y_left_in + delta_local_y_right_in) / 2.0;
+      double delta_left_in = (left_deg - prev_left_deg) * wheel_distance_in / 360.0;
+      double delta_right_in = (right_deg - prev_right_deg) * wheel_distance_in / 360.0;
+      double delta_horizontal_in = (horizontal_deg - prev_horizontal_deg) * horizontal_tracker_diameter * M_PI / 360.0;
+      double delta_vertical_in = (vertical_deg - prev_vertical_deg) * vertical_tracker_diameter * M_PI / 360.0;
+
+      // A wheel can't really travel 3 inches in 10 msec. A jump like that is a glitch, such as a motor
+      // briefly disconnecting and resetting its encoder, so skip this step instead of jumping
+      double forward_delta_in = use_vertical ? fabs(delta_vertical_in) : fmax(fabs(delta_left_in), fabs(delta_right_in));
+      bool glitch = forward_delta_in > 3 || (use_horizontal && fabs(delta_horizontal_in) > 3);
+
+      double delta_x_in = 0, delta_y_in = 0;
+      if (!glitch) {
+        odomStep(prev_heading_deg, heading_deg, delta_left_in, delta_right_in, delta_horizontal_in, delta_vertical_in,
+                 use_horizontal, use_vertical, distance_between_wheels, horizontal_tracker_dist_from_center,
+                 vertical_tracker_dist_from_center, delta_x_in, delta_y_in);
+      }
+      x_pos += delta_x_in;
+      y_pos += delta_y_in;
+      odom_motion_x += delta_x_in;
+      odom_motion_y += delta_y_in;
+
+      // Distance and speeds for the wait helpers and stall exits (lightly filtered)
+      double step_in = hypot(delta_x_in, delta_y_in);
+      double dt_sec = (now - prev_time) / 1000.0;
+      odom_traveled_in += step_in;
+      if (dt_sec > 0) {
+        odom_speed_ips = 0.7 * odom_speed_ips + 0.3 * (step_in / dt_sec);
+        odom_turn_rate_dps = 0.7 * odom_turn_rate_dps + 0.3 * (fabs(heading_deg - prev_heading_deg) / dt_sec);
+      }
     }
-    // Update global position using polar coordinates
-    double polar_angle_rad = prev_heading_rad + delta_heading_rad / 2.0;
-    double polar_radius_in = delta_local_y_in;
 
-    x_pos += polar_radius_in * sin(polar_angle_rad);
-    y_pos += polar_radius_in * cos(polar_angle_rad);
-
-    prev_heading_rad = heading_rad;
+    prev_heading_deg = heading_deg;
     prev_left_deg = left_deg;
     prev_right_deg = right_deg;
+    prev_horizontal_deg = horizontal_deg;
+    prev_vertical_deg = vertical_deg;
+    prev_time = now;
 
     wait(10, msec);
   }
 }
 
 /*
- * trackXYOdomWheel
- * Tracks the robot’s position using both horizontal and vertical odometry wheels plus inertial heading.
+ * trackNoOdomWheel / trackXYOdomWheel / trackXOdomWheel / trackYOdomWheel
+ * Odometry thread functions for each tracking wheel setup (kept so older custom folders still work).
+ * New code can call startOdometry() instead, which picks the right one.
  */
-void trackXYOdomWheel() {
-  resetChassis();
-  double prev_heading_rad = 0;
-  double prev_horizontal_pos_deg = 0, prev_vertical_pos_deg = 0;
-  double delta_local_x_in = 0, delta_local_y_in = 0;
-  double local_polar_angle_rad = 0;
-
-  while (true) {
-    double heading_rad = degToRad(getInertialHeading());
-    double horizontal_pos_deg = horizontal_tracker.position(degrees);
-    double vertical_pos_deg = vertical_tracker.position(degrees);
-    double delta_heading_rad = heading_rad - prev_heading_rad;
-    double delta_horizontal_in = (horizontal_pos_deg - prev_horizontal_pos_deg) * horizontal_tracker_diameter * M_PI / 360.0; // horizontal tracker delta (inches)
-    double delta_vertical_in = (vertical_pos_deg - prev_vertical_pos_deg) * vertical_tracker_diameter * M_PI / 360.0; // vertical tracker delta (inches)
-
-    // Calculate local movement based on heading change
-    if (fabs(delta_heading_rad) < 1e-6) {
-      delta_local_x_in = delta_horizontal_in;
-      delta_local_y_in = delta_vertical_in;
-    } else {
-      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
-      delta_local_x_in = sin_multiplier * ((delta_horizontal_in / delta_heading_rad) + horizontal_tracker_dist_from_center);
-      delta_local_y_in = sin_multiplier * ((delta_vertical_in / delta_heading_rad) + vertical_tracker_dist_from_center);
-    }
-
-    // Avoid undefined atan2(0, 0)
-    if (fabs(delta_local_x_in) < 1e-6 && fabs(delta_local_y_in) < 1e-6) {
-      local_polar_angle_rad = 0;
-    } else {
-      local_polar_angle_rad = atan2(delta_local_y_in, delta_local_x_in);
-    }
-    double polar_radius_in = sqrt(pow(delta_local_x_in, 2) + pow(delta_local_y_in, 2));
-    double polar_angle_rad = local_polar_angle_rad - heading_rad - (delta_heading_rad / 2);
-
-    x_pos += polar_radius_in * cos(polar_angle_rad);
-    y_pos += polar_radius_in * sin(polar_angle_rad);
-
-    prev_heading_rad = heading_rad;
-    prev_horizontal_pos_deg = horizontal_pos_deg;
-    prev_vertical_pos_deg = vertical_pos_deg;
-
-    wait(10, msec);
-  }
-}
+void trackNoOdomWheel() { runOdometry(false, false); }
+void trackXYOdomWheel() { runOdometry(true, true); }
+void trackXOdomWheel() { runOdometry(true, false); }
+void trackYOdomWheel() { runOdometry(false, true); }
 
 /*
- * trackXOdomWheel
- * Tracks position using only horizontal odometry wheel + drivetrain encoders + inertial heading.
+ * startOdometry
+ * Starts the odometry thread for the tracking wheels enabled in custom/src/robot-config.cpp.
  */
-void trackXOdomWheel() {
-  resetChassis();
-  double prev_heading_rad = 0;
-  double prev_horizontal_pos_deg = 0;
-  double prev_left_deg = 0, prev_right_deg = 0;
-  double delta_local_x_in = 0, delta_local_y_in = 0;
-  double local_polar_angle_rad = 0;
-
-  while (true) {
-    double heading_rad = degToRad(getInertialHeading());
-    double horizontal_pos_deg = horizontal_tracker.position(degrees);
-    double left_deg = getLeftRotationDegree();
-    double right_deg = getRightRotationDegree();
-    double delta_heading_rad = heading_rad - prev_heading_rad;
-    double delta_horizontal_in = (horizontal_pos_deg - prev_horizontal_pos_deg) * horizontal_tracker_diameter * M_PI / 360.0; // horizontal tracker delta (inches)
-    double delta_left_in = (left_deg - prev_left_deg) * wheel_distance_in / 360.0;   // Left wheel delta (inches)
-    double delta_right_in = (right_deg - prev_right_deg) * wheel_distance_in / 360.0; // Right wheel delta (inches)
-
-    // Calculate local movement based on heading change
-    if (fabs(delta_heading_rad) < 1e-6) {
-      delta_local_x_in = delta_horizontal_in;
-      delta_local_y_in = (delta_left_in + delta_right_in) / 2.0;
-    } else {
-      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
-      delta_local_x_in = sin_multiplier * ((delta_horizontal_in / delta_heading_rad) + horizontal_tracker_dist_from_center);
-      double delta_local_y_left_in = sin_multiplier * (delta_left_in / delta_heading_rad + distance_between_wheels / 2.0);
-      double delta_local_y_right_in = sin_multiplier * (delta_right_in / delta_heading_rad + distance_between_wheels / 2.0);
-      delta_local_y_in = (delta_local_y_left_in + delta_local_y_right_in) / 2.0;
-    }
-
-    if (fabs(delta_local_x_in) < 1e-6 && fabs(delta_local_y_in) < 1e-6) {
-      local_polar_angle_rad = 0;
-    } else {
-      local_polar_angle_rad = atan2(delta_local_y_in, delta_local_x_in);
-    }
-    double polar_radius_in = sqrt(pow(delta_local_x_in, 2) + pow(delta_local_y_in, 2));
-    double polar_angle_rad = local_polar_angle_rad - heading_rad - (delta_heading_rad / 2);
-
-    x_pos += polar_radius_in * cos(polar_angle_rad);
-    y_pos += polar_radius_in * sin(polar_angle_rad);
-    
-    prev_heading_rad = heading_rad;
-    prev_horizontal_pos_deg = horizontal_pos_deg;
-    prev_left_deg = left_deg;
-    prev_right_deg = right_deg;
-
-    wait(10, msec);
-  }
-}
-
-/*
- * trackYOdomWheel
- * Tracks position using only vertical odometry wheel + inertial heading.
- */
-void trackYOdomWheel() {
-  resetChassis();
-  double prev_heading_rad = 0;
-  double prev_vertical_pos_deg = 0;
-  double delta_local_y_in = 0;
-
-  while (true) {
-    double heading_rad = degToRad(getInertialHeading());
-    double vertical_pos_deg = vertical_tracker.position(degrees);
-    double delta_heading_rad = heading_rad - prev_heading_rad;
-    double delta_vertical_in = (vertical_pos_deg - prev_vertical_pos_deg) * vertical_tracker_diameter * M_PI / 360.0; // vertical tracker delta (inches)
-
-    // Calculate local movement based on heading change
-    if (fabs(delta_heading_rad) < 1e-6) {
-      delta_local_y_in = delta_vertical_in;
-    } else {
-      double sin_multiplier = 2.0 * sin(delta_heading_rad / 2.0);
-      delta_local_y_in = sin_multiplier * ((delta_vertical_in / delta_heading_rad) + vertical_tracker_dist_from_center);
-    }
-
-    double polar_angle_rad = prev_heading_rad + delta_heading_rad / 2.0;
-    double polar_radius_in = delta_local_y_in;
-
-    x_pos += polar_radius_in * cos(polar_angle_rad);
-    y_pos += polar_radius_in * sin(polar_angle_rad);
-
-    prev_heading_rad = heading_rad;
-    prev_vertical_pos_deg = vertical_pos_deg;
-
-    wait(10, msec);
+void startOdometry() {
+  if (using_horizontal_tracker && using_vertical_tracker) {
+    vex::thread odom = vex::thread(trackXYOdomWheel);
+  } else if (using_horizontal_tracker) {
+    vex::thread odom = vex::thread(trackXOdomWheel);
+  } else if (using_vertical_tracker) {
+    vex::thread odom = vex::thread(trackYOdomWheel);
+  } else {
+    vex::thread odom = vex::thread(trackNoOdomWheel);
   }
 }
 
@@ -933,7 +1081,7 @@ void trackYOdomWheel() {
  */
 void turnToPoint(double x, double y, int direction, double time_limit_msec) {
   stopChassis(vex::brakeType::coast); // Stop chassis before turning
-  is_turning = true;                  // Set turning state
+  beginMotion();
   double threshold = 1, add = 0;
   if(direction == -1) {
     add = 180; // Add 180 degrees if turning to face backward
@@ -964,7 +1112,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
   double current_heading;
   double previous_heading = 0;
   int index = 1;
-  while (!pid.targetArrived() && Brain.timer(msec) - start_time <= time_limit_msec) {
+  while (!pid.targetArrived() && motionActive(start_time, time_limit_msec)) {
     // Continuously update target as robot moves
     pid.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add));
     current_heading = getInertialHeading();
@@ -982,7 +1130,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
   }  
   stopChassis(vex::hold); // Stop at end
   correct_angle = getInertialHeading(); // Update global heading
-  is_turning = false;                   // Reset turning state
+  endMotion();
 }
 
 /*
@@ -997,7 +1145,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
  */
 void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit, double max_output, bool overturn) {
   stopChassis(vex::brakeType::coast); // Stop chassis before moving
-  is_turning = true;                  // Set turning state
+  beginMotion();
   double threshold = 0.5;
   int add = dir > 0 ? 0 : 180;
   double max_slew_fwd = dir > 0 ? max_slew_accel_fwd : max_slew_decel_rev;
@@ -1051,7 +1199,7 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
   bool ch = true;
 
   // Main PID loop for moving to point
-  while (Brain.timer(msec) - start_time <= time_limit_msec) {
+  while (motionActive(start_time, time_limit_msec)) {
     // Continuously update targets as robot moves
     pid_heading.setTarget(normalizeTarget(radToDeg(atan2(x - x_pos, y - y_pos)) + add));
     pid_distance.setTarget(hypot(x - x_pos, y - y_pos));
@@ -1120,7 +1268,7 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
     stopChassis(vex::hold); // Stop at end if required
   }
   correct_angle = getInertialHeading(); // Update global heading
-  is_turning = false;                   // Reset turning state
+  endMotion();
 }
 
 /*
@@ -1137,7 +1285,7 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
  */
 void boomerang(double x, double y, int dir, double a, double dlead, double time_limit_msec, bool exit, double max_output, bool overturn) {
   stopChassis(vex::brakeType::coast); // Stop chassis before moving
-  is_turning = true;                  // Set turning state
+  beginMotion();
   double threshold = 0.5;
   int add = dir > 0 ? 0 : 180;
   double max_slew_fwd = dir > 0 ? max_slew_accel_fwd : max_slew_decel_rev;
@@ -1185,7 +1333,7 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
   double current_angle = 0, hypotenuse = 0, carrot_x = 0, carrot_y = 0;
 
   // Main PID loop for boomerang path
-  while ((!pid_distance.targetArrived()) && Brain.timer(msec) - start_time <= time_limit_msec) {
+  while ((!pid_distance.targetArrived()) && motionActive(start_time, time_limit_msec)) {
     hypotenuse = hypot(x_pos - x, y_pos - y); // Distance to target
     // Calculate carrot point for path leading
     carrot_x = x - hypotenuse * sin(degToRad(a + add)) * dlead;
@@ -1271,7 +1419,124 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
     stopChassis(vex::hold); // Stop at end if required
   }
   correct_angle = a;      // Update global heading
-  is_turning = false;     // Reset turning state
+  endMotion();
+}
+
+// ============================================================================
+// MONTE CARLO LOCALIZATION (MCL)
+// ============================================================================
+
+/*
+ * runMcl
+ * MCL thread: while the robot drives, uses the distance sensors to keep x_pos/y_pos
+ * from drifting. The particle filter itself is in src/mcl.cpp. Start it with startMcl().
+ * Uses the same sensors, offsets, and checks as the distance reset functions.
+ */
+void runMcl() {
+  // Odometry movement and heading over the last 160 msec, for matching up delayed sensor readings
+  const int history_size = 16;
+  double history_x[history_size], history_y[history_size], history_heading[history_size];
+  for (int i = 0; i < history_size; i++) {
+    history_x[i] = odom_motion_x;
+    history_y[i] = odom_motion_y;
+    history_heading[i] = getInertialHeading();
+  }
+  double last_motion_x = odom_motion_x, last_motion_y = odom_motion_y, last_heading = getInertialHeading();
+  double moved_since_correct = 0;
+
+  vex::distance* sensors[4] = {&front_sensor, &right_sensor, &back_sensor, &left_sensor};
+  double sensor_x[4] = {front_sensor_offsetX, right_sensor_offsetX, back_sensor_offsetX, left_sensor_offsetX};
+  double sensor_y[4] = {front_sensor_offsetY, right_sensor_offsetY, back_sensor_offsetY, left_sensor_offsetY};
+  double sensor_angle[4] = {0, 90, 180, 270};
+  // Distance sensors only measure about every 33 msec, so remember each one's last reading to skip repeats
+  uint32_t last_stamp[4] = {0, 0, 0, 0};
+  double last_reading[4] = {-1, -1, -1, -1};
+
+  mclInit(mcl_particles, x_pos, y_pos, 1.0);
+  mcl_running = true;
+  int tick = 0;
+
+  while (true) {
+    double heading = getInertialHeading();
+    history_x[tick % history_size] = odom_motion_x;
+    history_y[tick % history_size] = odom_motion_y;
+    history_heading[tick % history_size] = heading;
+
+    if (mcl_recenter) {
+      // setPose() or a distance reset just set the position; start the particles there
+      mcl_recenter = false;
+      mclInit(mcl_particles, x_pos, y_pos, 1.0);
+    }
+
+    // Run the filter every 30 msec (about how often the distance sensors update)
+    if (tick % 3 == 0) {
+      uint64_t cycle_start = vex::timer::systemHighResolution();
+      double delta_x = odom_motion_x - last_motion_x, delta_y = odom_motion_y - last_motion_y;
+      double delta_heading = heading - last_heading;
+      last_motion_x = odom_motion_x;
+      last_motion_y = odom_motion_y;
+      last_heading = heading;
+      mclPredict(delta_x, delta_y, delta_heading);
+      moved_since_correct += hypot(delta_x, delta_y) + fabs(delta_heading) * 0.05;
+
+      // Readings lag behind, so compare them with where odometry says the robot was back then
+      int delay_ticks = (int)fmin(fmax(round(distance_sensor_delay_msec / 10.0), 0), history_size - 1);
+      int then = ((tick - delay_ticks) % history_size + history_size) % history_size;
+      double shift_x = odom_motion_x - history_x[then], shift_y = odom_motion_y - history_y[then];
+      double heading_then = history_heading[then];
+
+      // Keep readings that hit a wall cleanly (same checks as the distance resets)
+      MclReading readings[4];
+      int count = 0;
+      for (int i = 0; i < 4; i++) {
+        if (!sensors[i]->installed() || !sensors[i]->isObjectDetected()) {
+          continue;
+        }
+        double reading_in = sensors[i]->objectDistance(inches) * distance_sensor_scale;
+        uint32_t stamp = sensors[i]->timestamp();
+        bool repeat = stamp == last_stamp[i] || reading_in == last_reading[i];
+        last_stamp[i] = stamp;
+        last_reading[i] = reading_in;
+        if (repeat || reading_in < 1.5 || reading_in > mcl_max_range) {
+          continue;
+        }
+        double unused = 0;
+        if (distanceResetPosition(x_pos - shift_x, y_pos - shift_y, heading_then, sensor_x[i], sensor_y[i], sensor_angle[i],
+                                  reading_in, field_half_size, distance_reset_max_angle, distance_reset_corner_margin, unused) == 0) {
+          continue;
+        }
+        readings[count].s_x = sensor_x[i];
+        readings[count].s_y = sensor_y[i];
+        readings[count].angle_deg = sensor_angle[i];
+        readings[count].reading_in = reading_in;
+        count++;
+      }
+
+      // Only weigh after moving a little, so a parked robot doesn't get overconfident from repeated
+      // readings, and not while spinning fast, when delayed readings are least trustworthy
+      if (count > 0 && moved_since_correct > 0.25 && odom_turn_rate_dps < 200) {
+        mclCorrect(heading_then, readings, count, field_half_size, odom_speed_ips * 0.01, shift_x, shift_y);
+        moved_since_correct = 0;
+      }
+      double spread_x = 0, spread_y = 0;
+      mclEstimate(mcl_x, mcl_y, spread_x, spread_y);
+      mcl_spread = fmax(spread_x, spread_y);
+      mclNudge(x_pos, y_pos, mcl_x, mcl_y, spread_x, spread_y);
+      mcl_cycle_msec = 0.8 * mcl_cycle_msec + 0.2 * (vex::timer::systemHighResolution() - cycle_start) / 1000.0;
+    }
+
+    tick++;
+    wait(10, msec);
+  }
+}
+
+/*
+ * startMcl
+ * Starts MCL in the background. Call it after startOdometry() and setPose(), and use
+ * field-centered coordinates (origin at the field center, walls at +/-70.25 in).
+ */
+void startMcl() {
+  vex::thread mcl = vex::thread(runMcl);
 }
 
 // ============================================================================
@@ -1280,109 +1545,66 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
 
 /*
  * resetPositionWithSensor
- * Resets position using a distance sensor based on which wall the robot is facing.
- * Only resets X or Y position (not both) based on the wall being measured.
- * 
+ * Resets X or Y using one distance sensor and the field wall its beam hits.
+ * The current position estimate decides which wall that is, so angled readings
+ * and readings near corners work. Needs field-centered coordinates (see setPose()).
+ * Returns true if the position was reset, false if the reading was skipped.
+ *
  * - sensor: Distance sensor to use
- * - sensor_offset: Distance offset of the sensor from robot center (in inches)
- * - sensor_angle_offset: Angle offset for the sensor direction (0° = front, 90° = right, 180° = back, 270° = left)
- * - field_half_size: Half the field dimension (distance from center to wall, in inches)
+ * - s_x, s_y: Sensor position relative to the robot's center (in inches, +x = right, +y = forward)
+ * - sensor_angle_offset: Direction the sensor faces on the robot (0° = front, 90° = right, 180° = back, 270° = left)
+ * - field_half_size: Distance from the field center to each wall (in inches)
 
  ** - IMPORTANT NOTE FOR THE USER - **
  * - DO NOT CALL THIS FUNCTION DIRECTLY, use the specific direction functions below instead.
  */
-void resetPositionWithSensor(vex::distance& sensor, double s_x, double s_y, double sensor_angle_offset, double field_half_size) {
-    double sensorReading = sensor.objectDistance(inches);
-  
-    if (sensorReading < 0 || sensorReading > 200) {
-        return; // Don't reset if reading is clearly garbage
-    }
-    
-    double current_heading_deg = getInertialHeading();
-    double sensor_heading_deg = current_heading_deg + sensor_angle_offset;
-    
-    // Normalize to 0–360
-    double heading = fmod(sensor_heading_deg, 360.0);
-    if (heading < 0) heading += 360;
+bool resetPositionWithSensor(vex::distance& sensor, double s_x, double s_y, double sensor_angle_offset, double field_half_size) {
+  // The V5 distance sensor reads up to about 2000 mm (78 in); anything else means no wall was seen
+  if (!sensor.isObjectDetected()) {
+    return false;
+  }
+  double reading_in = sensor.objectDistance(inches) * distance_sensor_scale;
+  if (reading_in <= 0 || reading_in > 78) {
+    return false;
+  }
 
-    bool resettingX = false;
-    double wallAngle = 0;
-    double wallSign = 1.0;
+  double new_pos = 0;
+  int axis = distanceResetPosition(x_pos, y_pos, getInertialHeading(), s_x, s_y, sensor_angle_offset, reading_in,
+                                   field_half_size, distance_reset_max_angle, distance_reset_corner_margin, new_pos);
+  if (axis == 0) {
+    return false;
+  }
 
-    // Identify which wall we are looking at
-    if (heading <= 45 || heading >= 315)      { resettingX = false; wallAngle = 0;   wallSign = 1.0; }  // North (+Y)
-    else if (heading > 45 && heading <= 135)  { resettingX = true;  wallAngle = 90;  wallSign = 1.0; }  // East (+X)
-    else if (heading > 135 && heading <= 225) { resettingX = false; wallAngle = 180; wallSign = -1.0; } // South (-Y)
-    else                                      { resettingX = true;  wallAngle = 270; wallSign = -1.0; } // West (-X)
+  // Optionally skip resets that disagree a lot with odometry (probably seeing a robot or game element)
+  double old_pos = axis == 1 ? x_pos : y_pos;
+  if (distance_reset_max_jump > 0 && fabs(new_pos - old_pos) > distance_reset_max_jump) {
+    return false;
+  }
 
-    // Calculate the perpendicular distance from sensor to wall
-    double angleErrorRad = (heading - wallAngle) * M_PI / 180.0;
-    double perpendicularDistance = sensorReading * cos(angleErrorRad);
-
-    // Convert robot heading to radians
-    double thetaRad = current_heading_deg * M_PI / 180.0;
-    double rotatedOffset;
-
-    if (resettingX) {
-        // Contribution of the sensor's X/Y physical position to the X-axis distance
-        rotatedOffset = (s_x * cos(thetaRad)) + (s_y * sin(thetaRad));
-    } else {
-        // Contribution of the sensor's X/Y physical position to the Y-axis distance
-        rotatedOffset = (-s_x * sin(thetaRad)) + (s_y * cos(thetaRad));
-    }
-
-    // Final Position Calculation
-    double wallToCenter = perpendicularDistance + (wallSign * rotatedOffset);
-    double actualPos = wallSign * (field_half_size - wallToCenter);
-
-    if (resettingX) x_pos = actualPos; else y_pos = actualPos;
+  if (axis == 1) x_pos = new_pos; else y_pos = new_pos;
+  mcl_recenter = true;
+  return true;
 }
 
 /*
- * resetPositionFront
- * Resets position using the front distance sensor.
- * - sensor: Front distance sensor
- * - sensor_offset: Distance offset of the sensor from robot center (in inches)
- * - field_half_size: Half the field dimension (distance from center to wall, in inches)
+ * resetPositionFront / resetPositionBack / resetPositionLeft / resetPositionRight
+ * Reset position using the distance sensor on that side of the robot.
+ * Each returns true if the position was reset.
  */
-void resetPositionFront() {
-    resetPositionWithSensor(front_sensor, front_sensor_offsetX, front_sensor_offsetY, 0.0, field_half_size);
+bool resetPositionFront() {
+  return resetPositionWithSensor(front_sensor, front_sensor_offsetX, front_sensor_offsetY, 0.0, field_half_size);
 }
 
-/*
- * resetPositionBack
- * Resets position using the back distance sensor.
- * Remember to only use these when perpendicular to the wall!
- * - sensor: Back distance sensor 
- * - sensor_offset: Distance offset of the sensor from robot center (in inches)
- * - field_half_size: Half the field dimension (distance from center to wall, in inches)
- */
-
-void resetPositionBack() {
-    resetPositionWithSensor(back_sensor, back_sensor_offsetX, back_sensor_offsetY, 180.0, field_half_size);
-}
-   
-
-/*
- * resetPositionLeft
- * Resets position using the left distance sensor.
- * - sensor: Left distance sensor
- * - sensor_offset: Distance offset of the sensor from robot center (in inches)
- * - field_half_size: Half the field dimension (distance from center to wall, in inches)
- */
-void resetPositionLeft() {
-    resetPositionWithSensor(left_sensor, left_sensor_offsetX, left_sensor_offsetY, 270.0, field_half_size);
+bool resetPositionBack() {
+  return resetPositionWithSensor(back_sensor, back_sensor_offsetX, back_sensor_offsetY, 180.0, field_half_size);
 }
 
-/*
- * resetPositionRight
- * Resets position using the right distance sensor.
- * - sensor: Right distance sensor
- * - sensor_offset: Distance offset of the sensor from robot center (in inches)
- * - field_half_size: Half the field dimension (distance from center to wall, in inches)
- */
-void resetPositionRight() {
-    resetPositionWithSensor(right_sensor, right_sensor_offsetX, right_sensor_offsetY, 90.0, field_half_size);
+bool resetPositionLeft() {
+  return resetPositionWithSensor(left_sensor, left_sensor_offsetX, left_sensor_offsetY, 270.0, field_half_size);
+}
+
+bool resetPositionRight() {
+  return resetPositionWithSensor(right_sensor, right_sensor_offsetX, right_sensor_offsetY, 90.0, field_half_size);
 }
 
 // ============================================================================

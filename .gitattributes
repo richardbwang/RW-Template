@@ -1,2 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Shell scripts must keep Unix line endings to run (e.g. in WSL on Windows)
+*.sh text eol=lf

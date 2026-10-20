@@ -1,35 +1,17 @@
 #include "vex.h"
 #include "motor-control.h"
+#include "driver-control.h"
+#include "auton-selector.h"
+#include "drive-log.h"
 #include "../custom/include/autonomous.h"
 #include "../custom/include/robot-config.h"
 
 // Modify autonomous, driver, or pre-auton code below
 
 void runAutonomous() {
-  int auton_selected = 3;
-  switch(auton_selected) {
-    case 1:
-      exampleAuton();
-      break;
-    case 2:
-      exampleAuton2();
-      break;  
-    case 3:
-      redGoalRush();
-      break;
-    case 4:
-      break; 
-    case 5:
-      break;
-    case 6:
-      break;
-    case 7:
-      break;
-    case 8:
-      break;
-    case 9:
-      break;
-  }
+  // Runs the routine picked on the Brain screen (or with the controller arrows while disabled).
+  // Add routines to the list in runPreAutonomous() below.
+  runSelectedAuton();
 }
 
 // controller_1 input variables (snake_case)
@@ -63,8 +45,11 @@ void runDriver() {
     button_left_arrow = controller_1.ButtonLeft.pressing();
     button_right_arrow = controller_1.ButtonRight.pressing();
 
-    // default tank drive or replace it with your preferred driver code here: 
-    driveChassis(ch3 * 0.12, ch2 * 0.12);
+    // default tank drive or replace it with your preferred driver code here:
+    driverTank(ch3, ch2);
+    // Arcade on the left stick:           driverArcade(ch3, ch4);
+    // Split arcade (left fwd, right turn): driverArcade(ch3, ch1);
+    // Tune feel with driver_curve and driver_deadband in custom/src/robot-config.cpp
 
     wait(10, msec); 
   }
@@ -82,18 +67,20 @@ void runPreAutonomous() {
     wait(10, msec);
   }
 
-  double current_heading = inertial_sensor.heading();
-  Brain.Screen.print(current_heading);
-  
-  // odom tracking
-  resetChassis();
-  if(using_horizontal_tracker && using_vertical_tracker) {
-    thread odom = thread(trackXYOdomWheel);
-  } else if (using_horizontal_tracker) {
-    thread odom = thread(trackXOdomWheel);
-  } else if (using_vertical_tracker) {
-    thread odom = thread(trackYOdomWheel);
-  } else {
-    thread odom = thread(trackNoOdomWheel);
-  }
+  // odom tracking (picks the setup from using_horizontal_tracker / using_vertical_tracker)
+  startOdometry();
+
+  // Optional: MCL uses the distance sensors to keep odometry from drifting while driving.
+  // Needs field-centered coordinates, so start each auton with setPose() at the real field position.
+  // startMcl();
+
+  // Autonomous routines for the selector, in the order they appear on the Brain screen
+  addAuton("Tuning Test", exampleAuton);
+  addAuton("Odom Test", exampleAuton2);
+  addAuton("Red Goal Rush", redGoalRush);
+  addAuton("Async Example", asyncExample);
+  addAuton("Path Example", pathExample);
+  addAuton("Profiled Example", profiledExample);
+  addAuton("Drive Calibration", calibrateDrive);  // For the simulator (see README)
+  startAutonSelector();
 }

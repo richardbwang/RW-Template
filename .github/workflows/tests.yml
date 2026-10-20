@@ -1,0 +1,62 @@
+# Builds and runs the computer-side tools (tests and simulator) on Linux with GCC, the setup the
+# README points Windows users to through WSL, and on macOS with Apple clang.
+# The robot code itself is still built for the V5 Brain with the VEX extension; this doesn't do that.
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests and simulator (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compiler version
+        run: c++ --version
+
+      - name: Tests
+        run: sh tests/run-tests.sh
+
+      # run-tests.sh also runs this, but pipes it through tail, so a failure there doesn't fail the step
+      - name: Simulator fitter self-test
+        if: ${{ !cancelled() }}
+        run: sh sim/fit-profile.sh --self-test
+
+      - name: List autons
+        if: ${{ !cancelled() }}
+        run: sh sim/run-sim.sh --list
+
+      # Runs every auton added with addAuton(), whatever your autons are called. 20 s gives the
+      # Drive Calibration auton time to save its log. Routines that run the whole time still pass.
+      - name: Simulate every auton
+        if: ${{ !cancelled() }}
+        run: |
+          sh sim/run-sim.sh --list | sed -n 's/^  //p' > "$RUNNER_TEMP/autons.txt"
+          status=0
+          while IFS= read -r name; do
+            echo "::group::$name"
+            sh sim/run-sim.sh "$name" --time 20 < /dev/null || status=1
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/autons.txt"
+          exit $status
+
+      # Download from the run's Summary page and open the .html files in a browser
+      - name: Upload simulator replays
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sim-replays-${{ matrix.os }}
+          path: sim/out/*.html
+          if-no-files-found: warn

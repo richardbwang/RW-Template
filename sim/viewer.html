@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RW Sim Replay</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512' width='512' height='512'%3E%3Ctitle%3ERW-Template%3C/title%3E%3Cdefs%3E%3ClinearGradient id='plate' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%231d2026'/%3E%3Cstop offset='1' stop-color='%230f1115'/%3E%3C/linearGradient%3E%3ClinearGradient id='chrome' gradientUnits='userSpaceOnUse' x1='80' y1='420' x2='480' y2='90'%3E%3Cstop offset='0' stop-color='%238b9099'/%3E%3Cstop offset='0.6' stop-color='%23d9dadd'/%3E%3Cstop offset='1' stop-color='%23ffffff'/%3E%3C/linearGradient%3E%3Cpattern id='grid' width='32' height='32' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='16' cy='16' r='1.5' fill='%23ffffff' fill-opacity='0.06'/%3E%3C/pattern%3E%3Cfilter id='glow' x='-30%25' y='-30%25' width='160%25' height='160%25'%3E%3CfeGaussianBlur stdDeviation='8' result='b'/%3E%3CfeComponentTransfer in='b' result='s'%3E%3CfeFuncA type='linear' slope='0.25'/%3E%3C/feComponentTransfer%3E%3CfeMerge%3E%3CfeMergeNode in='s'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E%3C/filter%3E%3Cfilter id='redglow' x='-60%25' y='-60%25' width='220%25' height='220%25'%3E%3CfeGaussianBlur stdDeviation='9' result='b'/%3E%3CfeComponentTransfer in='b' result='s'%3E%3CfeFuncA type='linear' slope='0.7'/%3E%3C/feComponentTransfer%3E%3CfeMerge%3E%3CfeMergeNode in='s'/%3E%3CfeMergeNode in='SourceGraphic'/%3E%3C/feMerge%3E%3C/filter%3E%3C/defs%3E%3Crect width='512' height='512' rx='112' fill='url%28%23plate%29'/%3E%3Crect width='512' height='512' rx='112' fill='url%28%23grid%29'/%3E%3Crect x='2' y='2' width='508' height='508' rx='110' fill='none' stroke='%23ffffff' stroke-opacity='0.14' stroke-width='2'/%3E%3Cg transform='translate%28256 256%29 scale%280.92%29 translate%28-256 -256%29'%3E%3Cg transform='translate%28-14 10%29'%3E%3Cpath filter='url%28%23glow%29' fill='none' stroke='url%28%23chrome%29' stroke-width='36' stroke-linecap='round' stroke-linejoin='round'%0A          d='M96 404 C96 300 100 180 108 128 C112 100 150 100 190 104 C250 110 262 200 200 236 C168 250 136 252 112 256 C160 272 210 330 238 392 C246 410 262 410 270 390 C282 330 296 214 312 206 C330 198 338 320 350 380 C358 410 376 410 386 390 C404 340 424 230 444 140'/%3E%3Cpath filter='url%28%23redglow%29' fill='%23ef4444' stroke='%23ef4444' stroke-width='10' stroke-linejoin='round'%0A          d='M456.2 85.3 L479.1 147.8 L408.9 132.2 Z'/%3E%3Ccircle cx='96' cy='404' r='15' fill='%2316181d' stroke='%238b9099' stroke-width='8'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --text: #1c2230; --muted: #5f6878; --line: #d8dde6;
+    --tile: #e8ebf0; --tile-line: #cbd2dc; --wall: #4a5363;
+    --true: #1f6feb; --belief: #d9480f; --mcl: #2b8a3e; --robot: rgba(31, 111, 235, 0.16);
+    --goal: #3d4350; --red: #e03131; --blue: #1c7ed6; --stack: #f2b705; --good: #2b8a3e; --warn: #c92a2a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11141a; --panel: #1a1f28; --text: #e5e8ee; --muted: #98a1b0; --line: #2b3240;
+      --tile: #1f252f; --tile-line: #2e3644; --wall: #8a94a6;
+      --true: #5ea8ff; --belief: #ff8a4c; --mcl: #63d47a; --robot: rgba(94, 168, 255, 0.18);
+      --goal: #aab2c0; --red: #ff6b6b; --blue: #4dabf7; --stack: #f5c542; --good: #63d47a; --warn: #ff6b6b;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11141a; --panel: #1a1f28; --text: #e5e8ee; --muted: #98a1b0; --line: #2b3240;
+    --tile: #1f252f; --tile-line: #2e3644; --wall: #8a94a6;
+    --true: #5ea8ff; --belief: #ff8a4c; --mcl: #63d47a; --robot: rgba(94, 168, 255, 0.18);
+    --goal: #aab2c0; --red: #ff6b6b; --blue: #4dabf7; --stack: #f5c542; --good: #63d47a; --warn: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 14px 16px 6px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .logo { flex: none; }
+  h1 { font-size: 18px; margin: 0; }
+  header .sub { color: var(--muted); }
+  main { display: flex; flex-wrap: wrap; gap: 16px; padding: 8px 16px 20px; align-items: flex-start; }
+  .field-wrap { flex: 1 1 420px; max-width: 720px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 10px; }
+  canvas { width: 100%; display: block; touch-action: none; }
+  aside { flex: 1 1 260px; max-width: 420px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+  .card h2 { font-size: 13px; margin: 0 0 8px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  button, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  input[type=range] { width: 100%; accent-color: var(--true); }
+  .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; font-variant-numeric: tabular-nums; }
+  .grid .k { color: var(--muted); }
+  .big { font-size: 22px; font-weight: 650; }
+  .good { color: var(--good); } .warn { color: var(--warn); }
+  .legend { display: flex; flex-direction: column; gap: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .swatch { width: 26px; height: 0; border-top: 3px solid; display: inline-block; }
+  .bars { display: grid; grid-template-columns: auto 1fr auto; gap: 4px 8px; align-items: center; font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; background: var(--tile); border-radius: 4px; position: relative; overflow: hidden; }
+  .bar i { position: absolute; top: 0; bottom: 0; background: var(--true); }
+  .empty { padding: 40px 16px; text-align: center; color: var(--muted); }
+  code { background: var(--tile); padding: 1px 5px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<script>
+const SIM = /*SIM_DATA*/null;
+</script>
+<header>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="30" height="30" aria-hidden="true" class="logo"><title>RW-Template</title><defs><linearGradient id="plate" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1d2026"/><stop offset="1" stop-color="#0f1115"/></linearGradient><linearGradient id="chrome" gradientUnits="userSpaceOnUse" x1="80" y1="420" x2="480" y2="90"><stop offset="0" stop-color="#8b9099"/><stop offset="0.6" stop-color="#d9dadd"/><stop offset="1" stop-color="#ffffff"/></linearGradient><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><circle cx="16" cy="16" r="1.5" fill="#ffffff" fill-opacity="0.06"/></pattern><filter id="glow" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="8" result="b"/><feComponentTransfer in="b" result="s"><feFuncA type="linear" slope="0.25"/></feComponentTransfer><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter><filter id="redglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="9" result="b"/><feComponentTransfer in="b" result="s"><feFuncA type="linear" slope="0.7"/></feComponentTransfer><feMerge><feMergeNode in="s"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><rect width="512" height="512" rx="112" fill="url(#plate)"/><rect width="512" height="512" rx="112" fill="url(#grid)"/><rect x="2" y="2" width="508" height="508" rx="110" fill="none" stroke="#ffffff" stroke-opacity="0.14" stroke-width="2"/><g transform="translate(256 256) scale(0.92) translate(-256 -256)"><g transform="translate(-14 10)"><path filter="url(#glow)" fill="none" stroke="url(#chrome)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"
+          d="M96 404 C96 300 100 180 108 128 C112 100 150 100 190 104 C250 110 262 200 200 236 C168 250 136 252 112 256 C160 272 210 330 238 392 C246 410 262 410 270 390 C282 330 296 214 312 206 C330 198 338 320 350 380 C358 410 376 410 386 390 C404 340 424 230 444 140"/><path filter="url(#redglow)" fill="#ef4444" stroke="#ef4444" stroke-width="10" stroke-linejoin="round"
+          d="M456.2 85.3 L479.1 147.8 L408.9 132.2 Z"/><circle cx="96" cy="404" r="15" fill="#16181d" stroke="#8b9099" stroke-width="8"/></g></g></svg>
+  <h1>RW Sim Replay</h1>
+  <span class="sub" id="title"></span>
+</header>
+<main id="app">
+  <section class="field-wrap"><canvas id="field" aria-label="Field replay"></canvas></section>
+  <aside>
+    <div class="card">
+      <div class="controls">
+        <button id="play">Play</button>
+        <select id="speed" aria-label="Playback speed">
+          <option value="0.25">0.25x</option><option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option><option value="2">2x</option><option value="4">4x</option>
+        </select>
+        <span class="clock" id="clock"></span>
+      </div>
+      <input type="range" id="time" min="0" max="0" value="0" aria-label="Time">
+    </div>
+    <div class="card">
+      <h2>Result</h2>
+      <div class="grid" id="result"></div>
+    </div>
+    <div class="card">
+      <h2>Right now</h2>
+      <div class="grid" id="now"></div>
+      <div class="bars" style="margin-top:8px">
+        <span>Left</span><div class="bar"><i id="lbar"></i></div><span id="lv"></span>
+        <span>Right</span><div class="bar"><i id="rbar"></i></div><span id="rv"></span>
+      </div>
+    </div>
+    <div class="card legend">
+      <span><i class="swatch" style="border-color:var(--true)"></i>Where the robot really went</span>
+      <span><i class="swatch" style="border-color:var(--belief);border-top-style:dashed"></i>Where RW thought it was</span>
+      <span id="mclLegend"><i class="swatch" style="border-color:var(--mcl);border-top-style:dotted"></i>MCL estimate</span>
+    </div>
+  </aside>
+</main>
+<script>
+(function () {
+  const app = document.getElementById('app');
+  if (!SIM) {
+    app.innerHTML = '<div class="empty">This is the replay template. Run <code>sh sim/run-sim.sh "Auton Name"</code> to make a replay.</div>';
+    return;
+  }
+  const S = SIM.samples;  // [t, true x, y, heading, belief x, y, heading, moving, mcl, mcl x, y, left V, right V]
+  const half = SIM.half, size = SIM.size;
+  const hasMcl = S.some(s => s[8]);
+  document.getElementById('title').textContent = SIM.name + (SIM.realistic ? '' : ' (ideal robot)');
+  document.getElementById('mclLegend').style.display = hasMcl ? '' : 'none';
+
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const canvas = document.getElementById('field');
+  const ctx = canvas.getContext('2d');
+  const slider = document.getElementById('time');
+  slider.max = S.length - 1;
+  let index = 0, playing = false, last = 0, simTime = 0;
+
+  // Field-centered inches to canvas pixels (+y is up on screen)
+  let scale = 1, pad = 6;
+  function px(x, y) { return [(x + half) * scale + pad, (half - y) * scale + pad]; }
+  function resize() {
+    const w = canvas.clientWidth;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = w * ratio;
+    canvas.height = w * ratio;
+    canvas.style.height = w + 'px';
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    scale = (w - 2 * pad) / (2 * half);
+    draw();
+  }
+
+  function drawField() {
+    const w = canvas.clientWidth;
+    ctx.fillStyle = css('--panel');
+    ctx.fillRect(0, 0, w, w);
+    const tile = 2 * half / 6;
+    for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) {
+      const [x, y] = px(-half + i * tile, half - j * tile);
+      ctx.fillStyle = css('--tile');
+      ctx.fillRect(x + 0.5, y + 0.5, tile * scale - 1, tile * scale - 1);
+    }
+    ctx.strokeStyle = css('--wall');
+    ctx.lineWidth = 3;
+    const [x0, y0] = px(-half, half);
+    ctx.strokeRect(x0, y0, 2 * half * scale, 2 * half * scale);
+    if (!SIM.override) return;
+    const goal = (x, y, color) => {
+      const [cx, cy] = px(x, y);
+      ctx.beginPath(); ctx.arc(cx, cy, 2.8 * scale, 0, Math.PI * 2);
+      ctx.fillStyle = color; ctx.fill();
+    };
+    goal(0, 0, css('--goal'));
+    [[-47.09, 23.55], [47.09, -23.55], [-23.55, 47.09], [23.55, -47.09]].forEach(p => goal(p[0], p[1], css('--goal')));
+    [[-47.09, -23.55], [-23.55, -47.09]].forEach(p => goal(p[0], p[1], css('--red')));
+    [[47.09, 23.55], [23.55, 47.09]].forEach(p => goal(p[0], p[1], css('--blue')));
+    const box = (x, y, w2, h2, color) => {
+      const [bx, by] = px(x - w2 / 2, y + h2 / 2);
+      ctx.fillStyle = color; ctx.fillRect(bx, by, w2 * scale, h2 * scale);
+    };
+    for (const sy of [-1, 1]) {
+      box(-68.5, sy * 58.7, 4, 5, css('--red'));
+      box(68.5, sy * 58.7, 4, 5, css('--blue'));
+      for (const sx of [-1, 1]) {
+        box(sx * 23.6, sy * 68.7, 3.2, 3.2, css('--stack'));
+        box(sx * 68.7, sy * 23.6, 3.2, 3.2, css('--stack'));
+      }
+    }
+  }
+
+  function path(fromIndex, toIndex, xi, yi, color, dash, width, alpha, onlyIf) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash); ctx.lineJoin = 'round';
+    ctx.beginPath();
+    let started = false;
+    for (let i = fromIndex; i <= toIndex; i++) {
+      if (onlyIf !== undefined && !S[i][onlyIf]) { started = false; continue; }
+      const [x, y] = px(S[i][xi], S[i][yi]);
+      if (!started) { ctx.moveTo(x, y); started = true; } else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function robotShape(x, y, headingDeg, stroke, fill, dash) {
+    const [cx, cy] = px(x, y);
+    const h = headingDeg * Math.PI / 180, r = size / 2 * scale;
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(h);
+    ctx.setLineDash(dash);
+    ctx.lineWidth = 2; ctx.strokeStyle = stroke;
+    if (fill) { ctx.fillStyle = fill; ctx.fillRect(-r, -r, 2 * r, 2 * r); }
+    ctx.strokeRect(-r, -r, 2 * r, 2 * r);
+    ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -r * 1.25); ctx.stroke();
+    ctx.restore();
+  }
+
+  function fmt(v, d = 1) { return (Math.round(v * 10 ** d) / 10 ** d).toFixed(d); }
+
+  function draw() {
+    drawField();
+    const s = S[index];
+    path(0, S.length - 1, 1, 2, css('--true'), [], 2, 0.18);
+    path(0, index, 1, 2, css('--true'), [], 2.5, 1);
+    path(0, index, 4, 5, css('--belief'), [7, 5], 2, 1);
+    if (hasMcl) path(0, index, 9, 10, css('--mcl'), [2, 4], 2, 1, 8);
+    const [sx, sy] = px(SIM.start[0], SIM.start[1]);
+    ctx.fillStyle = css('--muted'); ctx.beginPath(); ctx.arc(sx, sy, 3, 0, Math.PI * 2); ctx.fill();
+    robotShape(s[4], s[5], s[6], css('--belief'), null, [5, 4]);
+    robotShape(s[1], s[2], s[3], css('--true'), css('--robot'), []);
+
+    document.getElementById('clock').textContent = fmt(s[0], 2) + ' / ' + fmt(S[S.length - 1][0], 2) + ' s';
+    slider.value = index;
+    const err = Math.hypot(s[4] - s[1], s[5] - s[2]);
+    const herr = ((s[6] - s[3]) % 360 + 540) % 360 - 180;
+    document.getElementById('now').innerHTML =
+      `<span class="k">Robot</span><span>x ${fmt(s[1])}  y ${fmt(s[2])}  h ${fmt(s[3])}°</span>` +
+      `<span class="k">RW thinks</span><span>x ${fmt(s[4])}  y ${fmt(s[5])}  h ${fmt(s[6])}°</span>` +
+      (hasMcl ? `<span class="k">MCL</span><span>${s[8] ? 'x ' + fmt(s[9]) + '  y ' + fmt(s[10]) : 'off'}</span>` : '') +
+      `<span class="k">Off by</span><span class="${err > 2 ? 'warn' : ''}">${fmt(err, 2)} in, ${fmt(herr)}°</span>` +
+      `<span class="k">Motion</span><span>${s[7] ? 'running' : 'idle'}</span>`;
+    const bar = (id, v) => {
+      const el = document.getElementById(id);
+      const w = Math.min(Math.abs(v) / 12, 1) * 50;
+      el.style.left = v >= 0 ? '50%' : (50 - w) + '%';
+      el.style.width = w + '%';
+    };
+    bar('lbar', s[11]); bar('rbar', s[12]);
+    document.getElementById('lv').textContent = fmt(s[11]) + ' V';
+    document.getElementById('rv').textContent = fmt(s[12]) + ' V';
+  }
+
+  const finished = SIM.reason !== 'time limit';
+  document.getElementById('result').innerHTML =
+    `<span class="k">Ended</span><span class="${finished ? 'good' : 'warn'}">${finished ? 'Auton finished' : 'Hit the ' + fmt(SIM.limit, 0) + ' s limit'} at ${fmt(S[S.length - 1][0], 2)} s</span>` +
+    `<span class="k">Final error</span><span class="big ${SIM.endError > 2 ? 'warn' : ''}">${fmt(SIM.endError, 2)} in</span>` +
+    `<span class="k">Heading error</span><span>${fmt(SIM.endHeadingError, 1)}°</span>` +
+    `<span class="k">Worst error</span><span>${fmt(SIM.maxError, 2)} in at ${fmt(SIM.maxErrorT, 2)} s</span>` +
+    `<span class="k">Start</span><span>x ${fmt(SIM.start[0])}  y ${fmt(SIM.start[1])}  h ${fmt(SIM.start[2])}°</span>`;
+
+  function setIndexByTime(t) {
+    let lo = 0, hi = S.length - 1;
+    while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (S[mid][0] <= t) lo = mid; else hi = mid - 1; }
+    index = lo;
+  }
+  function tick(ts) {
+    if (!playing) return;
+    const dt = last ? (ts - last) / 1000 : 0;
+    last = ts;
+    simTime += dt * parseFloat(document.getElementById('speed').value);
+    if (simTime >= S[S.length - 1][0]) { simTime = S[S.length - 1][0]; playing = false; playButton.textContent = 'Replay'; }
+    setIndexByTime(simTime);
+    draw();
+    if (playing) requestAnimationFrame(tick);
+  }
+  const playButton = document.getElementById('play');
+  function toggle() {
+    if (!playing && index >= S.length - 1) { index = 0; simTime = 0; }
+    playing = !playing;
+    playButton.textContent = playing ? 'Pause' : 'Play';
+    last = 0;
+    if (playing) requestAnimationFrame(tick);
+  }
+  playButton.addEventListener('click', toggle);
+  slider.addEventListener('input', () => { index = +slider.value; simTime = S[index][0]; draw(); });
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'SELECT') return;
+    if (e.code === 'Space') { e.preventDefault(); toggle(); }
+    if (e.code === 'ArrowRight' || e.code === 'ArrowLeft') {
+      index = Math.max(0, Math.min(S.length - 1, index + (e.code === 'ArrowRight' ? 10 : -10)));
+      simTime = S[index][0]; draw();
+    }
+  });
+  window.addEventListener('resize', resize);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', draw);
+  resize();
+})();
+</script>
+</body>
+</html>

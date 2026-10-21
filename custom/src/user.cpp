@@ -26,10 +26,10 @@ void runDriver() {
   heading_correction = false;
   while (true) {
     // [-100, 100] for controller stick axis values
-    ch1 = controller_1.Axis1.value();
-    ch2 = controller_1.Axis2.value();
-    ch3 = controller_1.Axis3.value();
-    ch4 = controller_1.Axis4.value();
+    ch1 = controller_1.Axis1.position();
+    ch2 = controller_1.Axis2.position();
+    ch3 = controller_1.Axis3.position();
+    ch4 = controller_1.Axis4.position();
 
     // true/false for controller button presses
     l1 = controller_1.ButtonL1.pressing();
@@ -49,6 +49,7 @@ void runDriver() {
     driverTank(ch3, ch2);
     // Arcade on the left stick:           driverArcade(ch3, ch4);
     // Split arcade (left fwd, right turn): driverArcade(ch3, ch1);
+    // X-drive, mecanum or H-drive:         driverHolonomic(ch3, ch4, ch1);  or driverFieldCentric(ch3, ch4, ch1);
     // Tune feel with driver_curve and driver_deadband in custom/src/robot-config.cpp
 
     wait(10, msec); 
@@ -67,6 +68,9 @@ void runPreAutonomous() {
     wait(10, msec);
   }
 
+  // X-drive or mecanum: useHolonomicDrive(left_front, right_front, left_back, right_back);
+  // H-drive: useHDrive(strafe_motor);   (see the docs: Guide > Drive Types)
+
   // odom tracking (picks the setup from using_horizontal_tracker / using_vertical_tracker)
   startOdometry();
 
@@ -81,6 +85,6 @@ void runPreAutonomous() {
   addAuton("Async Example", asyncExample);
   addAuton("Path Example", pathExample);
   addAuton("Profiled Example", profiledExample);
-  addAuton("Drive Calibration", calibrateDrive);  // For the simulator (see README)
+  addAuton("Drive Calibration", calibrateDrive);  // For the simulator (see the docs: Simulator > Calibrating)
   startAutonSelector();
 }

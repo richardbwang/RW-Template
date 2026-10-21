@@ -13,6 +13,8 @@ double degToRad(double deg);
 
 double radToDeg(double rad);
 
+double turnTarget(double angle_deg, double heading_deg, int direction);
+
 double getRadius(double x, double y, double x1, double y1, double angle);
 
 double arcToChord(double wheel_delta_in, double delta_heading_rad, double offset_in);

@@ -10,8 +10,8 @@
 #include "vex.h"
 #include "motor-control.h"
 #include "math.h"
-#include "../custom/include/autonomous.h"
-#include "../custom/include/user.h"
+#include "../../custom/include/autonomous.h"
+#include "../../custom/include/user.h"
 
 using namespace vex;
 

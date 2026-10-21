@@ -10,6 +10,22 @@ double radToDeg(double rad) {
   return (rad * 180 / M_PI);
 }
 
+/*
+ * turnTarget
+ * The angle a turn drives to: angle_deg plus or minus whole turns, so that the robot turns from
+ * heading_deg the short way (direction 0), clockwise (1) or counterclockwise (-1).
+ * A robot up to 5 degrees past the target still turns the short way, instead of spinning almost all
+ * the way around.
+ */
+double turnTarget(double angle_deg, double heading_deg, int direction) {
+  double target = angle_deg;
+  while (target - heading_deg > 180) target -= 360;
+  while (target - heading_deg < -180) target += 360;
+  if (direction > 0 && target < heading_deg - 5) target += 360;
+  if (direction < 0 && target > heading_deg + 5) target -= 360;
+  return target;
+}
+
 double getRadius(double x, double y, double x1, double y1, double angle) {
   double delta_x = x1 - x;
   double delta_y = y1 - y;

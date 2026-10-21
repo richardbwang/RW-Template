@@ -1,5 +1,6 @@
-#include "vex.h"
+#include "hardware.h"
 #include <cmath>
+#include <stdio.h>
 #include <vector>
 #include "utils.h"
 #include "motor-control.h"
@@ -49,15 +50,15 @@ double profileSpeed(double requested) {
  * motion (from the motors' own speed readings), then update once per loop.
  */
 void resetWheelSpeeds() {
-  left_wheel_speed = left_chassis.velocity(rpm) * wheel_distance_in / 60.0;
-  right_wheel_speed = right_chassis.velocity(rpm) * wheel_distance_in / 60.0;
+  left_wheel_speed = hw::leftRpm() * wheel_distance_in / 60.0;
+  right_wheel_speed = hw::rightRpm() * wheel_distance_in / 60.0;
   last_left_deg = getLeftRotationDegree();
   last_right_deg = getRightRotationDegree();
-  last_speed_time = Brain.timer(msec);
+  last_speed_time = hw::timeMsec();
 }
 
 void updateWheelSpeeds() {
-  double now = Brain.timer(msec), left_deg = getLeftRotationDegree(), right_deg = getRightRotationDegree();
+  double now = hw::timeMsec(), left_deg = getLeftRotationDegree(), right_deg = getRightRotationDegree();
   if (last_speed_time >= 0 && now > last_speed_time) {
     double dt = (now - last_speed_time) / 1000.0;
     left_wheel_speed = 0.6 * left_wheel_speed + 0.4 * (left_deg - last_left_deg) / 360.0 * wheel_distance_in / dt;
@@ -111,10 +112,10 @@ void driveProfiled(double distance_in, double time_limit_msec, bool exit, double
   MotionProfile profile = makeProfile(distance_in, speed, profile_max_accel, current_speed, exit ? 0 : speed * 0.5);
   double start_left = getLeftRotationDegree(), start_right = getRightRotationDegree();
   double heading_target = normalizeTarget(correct_angle);
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
 
   while (motionActive(start_time, time_limit_msec)) {
-    double t = (Brain.timer(msec) - start_time) / 1000.0;
+    double t = (hw::timeMsec() - start_time) / 1000.0;
     double planned_position = 0, planned_speed = 0, planned_accel = 0;
     profileAt(profile, t, planned_position, planned_speed, planned_accel);
     double traveled = ((getLeftRotationDegree() - start_left) + (getRightRotationDegree() - start_right)) / 2.0 / 360.0 * wheel_distance_in;
@@ -127,10 +128,10 @@ void driveProfiled(double distance_in, double time_limit_msec, bool exit, double
     double speed_command = planned_speed + 5.0 * position_error;
     double turn_command = 0.8 * (heading_target - getInertialHeading());
     driveWheelSpeeds(speed_command + turn_command, speed_command - turn_command, planned_accel, planned_accel);
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if (exit) {
-    stopChassis(vex::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   endMotion();
 }
@@ -144,17 +145,26 @@ void driveProfiled(double distance_in, double time_limit_msec, bool exit, double
  * - max_speed: Top turning speed (degrees/s, 0 = profile_turn_speed).
  */
 void turnProfiled(double angle_deg, double time_limit_msec, bool exit, double max_speed) {
+  turnProfiled(angle_deg, TurnDirection::shortest, time_limit_msec, exit, max_speed);
+}
+
+/*
+ * turnProfiled
+ * The same, turning the way you pick: clockwise (right) or counterclockwise (left), for turns of about
+ * 180 degrees where the short way can go either way. Up to 5 degrees past the target, it still turns the short way.
+ */
+void turnProfiled(double angle_deg, TurnDirection direction, double time_limit_msec, bool exit, double max_speed) {
   beginMotion();
   resetWheelSpeeds();
-  double target = normalizeTarget(angle_deg);
+  double target = turnTarget(angle_deg, getInertialHeading(), (int)direction);
   double start_heading = getInertialHeading();
   double speed = max_speed > 0 ? max_speed : profile_turn_speed;
   MotionProfile profile = makeProfile(target - start_heading, speed, profile_turn_accel, 0, exit ? 0 : speed * 0.5);
   double half_track = distance_between_wheels / 2.0;
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
 
   while (motionActive(start_time, time_limit_msec)) {
-    double t = (Brain.timer(msec) - start_time) / 1000.0;
+    double t = (hw::timeMsec() - start_time) / 1000.0;
     double planned_angle = 0, planned_rate = 0, planned_accel = 0;
     profileAt(profile, t, planned_angle, planned_rate, planned_accel);
     double heading = getInertialHeading();
@@ -166,10 +176,10 @@ void turnProfiled(double angle_deg, double time_limit_msec, bool exit, double ma
     double wheel_speed = degToRad(rate_command) * half_track;
     double wheel_accel = degToRad(planned_accel) * half_track;
     driveWheelSpeeds(wheel_speed, -wheel_speed, wheel_accel, -wheel_accel);
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if (exit) {
-    stopChassis(vex::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   correct_angle = target;
   endMotion();
@@ -214,10 +224,10 @@ void followPath(const Path& path, double time_limit_msec, bool reverse, bool exi
   double command = fmax(0, direction * (left_wheel_speed + right_wheel_speed) / 2);
   double half_track = distance_between_wheels / 2.0;
   int closest = 0;
-  double start_time = Brain.timer(msec), last_time = start_time;
+  double start_time = hw::timeMsec(), last_time = start_time;
 
   while (motionActive(start_time, time_limit_msec)) {
-    double now = Brain.timer(msec), dt = fmax((now - last_time) / 1000.0, 0.001);
+    double now = hw::timeMsec(), dt = fmax((now - last_time) / 1000.0, 0.001);
     last_time = now;
     closest = closestSample(path, x_pos, y_pos, closest);
     if (atPathEnd(path, closest)) {
@@ -247,10 +257,10 @@ void followPath(const Path& path, double time_limit_msec, bool reverse, bool exi
     double outside = curvature * half_track * (reverse ? -1 : 1);
     double v = direction * command;
     driveWheelSpeeds(v * (1 + outside), v * (1 - outside), direction * accel * (1 + outside), direction * accel * (1 - outside));
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if (exit) {
-    stopChassis(vex::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   correct_angle = getInertialHeading();
   endMotion();
@@ -283,10 +293,10 @@ void followPathRamsete(const Path& path, double time_limit_msec, bool reverse, b
   std::vector<double> times = planPathTimes(path, speeds);
   double half_track = distance_between_wheels / 2.0;
   int index = 0;
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
 
   while (motionActive(start_time, time_limit_msec)) {
-    double t = (Brain.timer(msec) - start_time) / 1000.0;
+    double t = (hw::timeMsec() - start_time) / 1000.0;
     // Where the timetable says to be now (between two samples)
     while (index + 1 < n - 1 && times[index + 1] <= t) index++;
     const PathSample& a = path.samples[index];
@@ -322,10 +332,10 @@ void followPathRamsete(const Path& path, double time_limit_msec, bool reverse, b
             direction * ref_speed, ref_speed * ref_curvature, speed_command, turn_command);
     double turn_speed = turn_command * half_track;
     driveWheelSpeeds(speed_command + turn_speed, speed_command - turn_speed, direction * ref_accel, direction * ref_accel);
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if (exit) {
-    stopChassis(vex::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   correct_angle = getInertialHeading();
   endMotion();
@@ -346,18 +356,17 @@ void measureDriveFeedforward() {
   double steady_speed[6];
   double accel_sum = 0, accel_speed_sum = 0;
   int accel_count = 0;
-  Brain.Screen.clearScreen();
-  Brain.Screen.setCursor(1, 1);
-  Brain.Screen.print("Measuring the drivetrain...");
+  hw::screenClear(0x000000);
+  hw::screenRow(1, "Measuring the drivetrain...");
 
   for (int i = 0; i < 6; i++) {
     resetWheelSpeeds();
-    double start = Brain.timer(msec), speed_sum = 0, early_speed = 0, early_time = -1;
+    double start = hw::timeMsec(), speed_sum = 0, early_speed = 0, early_time = -1;
     int speed_count = 0;
-    while (Brain.timer(msec) - start < 800) {
+    while (hw::timeMsec() - start < 800) {
       driveChassis(volts_steps[i], volts_steps[i]);
       updateWheelSpeeds();
-      double t = Brain.timer(msec) - start;
+      double t = hw::timeMsec() - start;
       double speed = fabs(left_wheel_speed + right_wheel_speed) / 2;
       // Steady speed near the end of each step gives kS and kV
       if (t > 550) {
@@ -375,10 +384,10 @@ void measureDriveFeedforward() {
           accel_count++;
         }
       }
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
-    stopChassis(vex::brake);
-    wait(500, msec);
+    hw::stopDrive(hw::Stop::brake);
+    hw::sleepMsec(500);
     steady_speed[i] = speed_count > 0 ? speed_sum / speed_count : 0;
   }
 
@@ -398,14 +407,10 @@ void measureDriveFeedforward() {
 
   printf("drive_kS = %.3f; drive_kV = %.4f; drive_kA = %.4f\n", kS, kV, kA);
   while (true) {
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Put these in custom/src/robot-config.cpp:");
-    Brain.Screen.setCursor(2, 1);
-    Brain.Screen.print("double drive_kS = %.3f;", kS);
-    Brain.Screen.setCursor(3, 1);
-    Brain.Screen.print("double drive_kV = %.4f;", kV);
-    Brain.Screen.setCursor(4, 1);
-    Brain.Screen.print("double drive_kA = %.4f;", kA);
-    wait(200, msec);
+    hw::screenRow(1, "Put these in custom/src/robot-config.cpp:");
+    hw::screenRow(2, "double drive_kS = %.3f;", kS);
+    hw::screenRow(3, "double drive_kV = %.4f;", kV);
+    hw::screenRow(4, "double drive_kA = %.4f;", kA);
+    hw::sleepMsec(200);
   }
 }

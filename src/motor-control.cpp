@@ -1,12 +1,11 @@
-#include "vex.h"
+#include "hardware.h"
 #include "utils.h"
 #include "pid.h"
-#include <ctime>
 #include <cmath>
+#include <stdint.h>
+#include <stdio.h>
 #include "motor-control.h"
 #include "mcl.h"
-#include "../custom/include/autonomous.h"
-#include "../custom/include/robot-config.h"
 
 // ============================================================================
 // INTERNAL STATE (DO NOT CHANGE)
@@ -17,6 +16,8 @@ double x_pos = 0, y_pos = 0;
 double correct_angle = 0;
 // Field config for distance resets, DO NOT CHANGE
 double field_half_size = 70.25;  // Half field size in inches
+// Colors of the PID graph that turns draw on the Brain screen
+const uint32_t graph_background = 0x000000, graph_target = 0x00FF00, graph_trace = 0xFF0000;
 
 // Odometry extras: total distance driven (for waitUntilTraveled) and current speeds (for stall exits)
 double odom_traveled_in = 0;
@@ -34,7 +35,7 @@ double mcl_cycle_msec = 0; // How long each MCL update takes on the Brain
 bool motion_running = false, async_running = false, motion_cancel_requested = false;
 double motion_start_traveled_in = 0, motion_start_heading = 0;
 double stall_start_time = -1;
-int32_t async_thread_id = -1;
+intptr_t async_thread_id = -1;
 void (*async_motion)() = nullptr;
 
 // ============================================================================
@@ -63,27 +64,17 @@ RW_DEFAULT double distance_sensor_scale = 1.0;     // Multiplies distance readin
  */
 void driveChassis(double left_power, double right_power) {
   // Spin left and right chassis motors with specified voltages
-  left_chassis.spin(fwd, left_power, voltageUnits::volt);
-  right_chassis.spin(fwd, right_power, voltageUnits::volt);
+  hw::driveVolts(left_power, right_power);
 }
 
-/*
- * Stops both chassis motors with the specified brake type.
- * - type: Brake mode (coast, brake, or hold).
- */
-void stopChassis(brakeType type) {
-  // Stop left and right chassis motors using the given brake type
-  left_chassis.stop(type);
-  right_chassis.stop(type);
-}
+// stopChassis() is in src/vexcode/hardware.cpp (pros/rw/hardware.cpp on PROS), since it takes the platform's brake type
 
 /*
  * Resets the rotation position of both chassis motors to zero.
  */
 void resetChassis() {
   // Set both chassis motor encoders to zero
-  left_chassis.setPosition(0, degrees);
-  right_chassis.setPosition(0, degrees);
+  hw::resetDriveDegrees();
 }
 
 /*
@@ -91,7 +82,7 @@ void resetChassis() {
  */
 double getLeftRotationDegree() {
   // Get left chassis motor position in degrees
-  return left_chassis.position(degrees);
+  return hw::leftDegrees();
 }
 
 /*
@@ -99,7 +90,7 @@ double getLeftRotationDegree() {
  */
 double getRightRotationDegree() {
   // Get right chassis motor position in degrees
-  return right_chassis.position(degrees);
+  return hw::rightDegrees();
 }
 
 /*
@@ -108,12 +99,7 @@ double getRightRotationDegree() {
  */
 double normalizeTarget(double angle) {
   // Adjust angle to be within +/-180 degrees of the inertial sensor's rotation
-  if (angle - getInertialHeading() > 180) {
-    while (angle - getInertialHeading() > 180) angle -= 360;
-  } else if (angle - getInertialHeading() < -180) {
-    while (angle - getInertialHeading() < -180) angle += 360;
-  }
-  return angle;
+  return turnTarget(angle, getInertialHeading(), 0);
 }
 
 /*
@@ -121,7 +107,7 @@ double normalizeTarget(double angle) {
  */
 double getInertialHeading() {
   // Get inertial sensor rotation in degrees
-  return inertial_sensor.rotation(degrees) * imu_scale;
+  return hw::imuDegrees() * imu_scale;
 }
 
 // ============================================================================
@@ -186,7 +172,7 @@ void scaleToMax(double& left_output, double& right_output, double max_output) {
 void beginMotion() {
   // A regular motion started while an async motion is still running waits for it,
   // so two motions never fight over the drivetrain
-  if (async_running && vex::this_thread::get_id() != async_thread_id) {
+  if (async_running && hw::threadId() != async_thread_id) {
     waitForMotion();
   }
   motion_running = true;
@@ -206,11 +192,11 @@ void endMotion() {
  * motionActive
  * Loop condition shared by every motion. Returns false once the motion times out,
  * is cancelled with cancelMotion(), or (when stall_exit_msec > 0) has been stuck that long.
- * - start_time: Brain.timer(msec) when the motion started.
+ * - start_time: hw::timeMsec() when the motion started.
  * - time_limit_msec: Maximum time allowed for the motion (in milliseconds).
  */
 bool motionActive(double start_time, double time_limit_msec) {
-  double now = Brain.timer(msec);
+  double now = hw::timeMsec();
   if (now - start_time > time_limit_msec || motion_cancel_requested) {
     return false;
   }
@@ -233,7 +219,7 @@ bool motionActive(double start_time, double time_limit_msec) {
  * Thread body for runAsync(). Runs the queued motion, then marks the async slot free.
  */
 void asyncMotionThread() {
-  async_thread_id = vex::this_thread::get_id();
+  async_thread_id = hw::threadId();
   async_motion();
   async_running = false;
 }
@@ -254,7 +240,7 @@ void asyncMotionThread() {
  */
 void runAsync(void (*motion)()) {
   // Called from inside an async motion: just run it here instead of waiting on ourselves
-  if (async_running && vex::this_thread::get_id() == async_thread_id) {
+  if (async_running && hw::threadId() == async_thread_id) {
     motion();
     return;
   }
@@ -264,7 +250,7 @@ void runAsync(void (*motion)()) {
   // Start the progress counters now so wait helpers called right after this measure from here
   motion_start_traveled_in = odom_traveled_in;
   motion_start_heading = getInertialHeading();
-  vex::thread async_thread = vex::thread(asyncMotionThread);
+  hw::startThread(asyncMotionThread);
 }
 
 /*
@@ -273,11 +259,11 @@ void runAsync(void (*motion)()) {
  */
 void waitForMotion() {
   // Inside an async motion, its own motions run one after another, so there's nothing to wait for
-  if (async_running && vex::this_thread::get_id() == async_thread_id) {
+  if (async_running && hw::threadId() == async_thread_id) {
     return;
   }
   while (async_running || motion_running) {
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -289,7 +275,7 @@ void waitForMotion() {
  */
 void waitUntilTraveled(double distance_in) {
   while ((async_running || motion_running) && odom_traveled_in - motion_start_traveled_in < distance_in) {
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -300,7 +286,7 @@ void waitUntilTraveled(double distance_in) {
  */
 void waitUntilTurned(double angle_deg) {
   while ((async_running || motion_running) && fabs(getInertialHeading() - motion_start_heading) < angle_deg) {
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -312,7 +298,7 @@ void waitUntilTurned(double angle_deg) {
  */
 void waitUntilNear(double x, double y, double radius_in) {
   while ((async_running || motion_running) && hypot(x - x_pos, y - y_pos) > radius_in) {
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -341,7 +327,7 @@ bool isMotionRunning() {
  * - heading_deg: Robot heading (in degrees, 0 faces +Y, clockwise positive).
  */
 void setPose(double x, double y, double heading_deg) {
-  inertial_sensor.setRotation(heading_deg / imu_scale, degrees);
+  hw::setImuDegrees(heading_deg / imu_scale);
   x_pos = x;
   y_pos = y;
   correct_angle = heading_deg;
@@ -358,19 +344,16 @@ void setPose(double x, double y, double heading_deg) {
  * - turns: Number of full turns you will spin the robot (more turns = more accurate, 5-10 is good).
  */
 void measureImuScale(int turns) {
-  inertial_sensor.setRotation(0, degrees);
-  Brain.Screen.clearScreen();
+  hw::setImuDegrees(0);
+  hw::screenClear(0x000000);
   while (true) {
-    double raw = inertial_sensor.rotation(degrees);
-    Brain.Screen.setCursor(1, 1);
-    Brain.Screen.print("Spin the robot %d full turns clockwise", turns);
-    Brain.Screen.setCursor(2, 1);
-    Brain.Screen.print("IMU reads: %.2f deg (should be %d)     ", raw, turns * 360);
-    Brain.Screen.setCursor(3, 1);
+    double raw = hw::imuDegrees();
+    hw::screenRow(1, "Spin the robot %d full turns clockwise", turns);
+    hw::screenRow(2, "IMU reads: %.2f deg (should be %d)     ", raw, turns * 360);
     if (fabs(raw) > 90) {
-      Brain.Screen.print("imu_scale = %.5f     ", turns * 360.0 / raw);
+      hw::screenRow(3, "imu_scale = %.5f     ", turns * 360.0 / raw);
     }
-    wait(50, msec);
+    hw::sleepMsec(50);
   }
 }
 
@@ -379,21 +362,34 @@ void measureImuScale(int turns) {
 // ============================================================================
 
 /*
- * Turns the robot to a specified angle using PID control.
+ * Turns the robot to a specified angle using PID control, the short way.
  * - turn_angle: Target angle to turn to (in degrees).
  * - time_limit_msec: Maximum time allowed for the turn (in milliseconds).
  * - exit: If true, stops the robot at the end; if false, allows chaining.
  * - max_output: Maximum voltage output to motors.
  */
 void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double max_output) {
+  turnToAngle(turn_angle, TurnDirection::shortest, time_limit_msec, exit, max_output);
+}
+
+/*
+ * Turns the robot to a specified angle using PID control, the way you pick.
+ * - turn_angle: Target angle to turn to (in degrees).
+ * - direction: clockwise (right) or counterclockwise (left). For turns of about 180 degrees, where
+ *   the short way can go either way. Up to 5 degrees past the target, it still turns the short way.
+ * - time_limit_msec: Maximum time allowed for the turn (in milliseconds).
+ * - exit: If true, stops the robot at the end; if false, allows chaining.
+ * - max_output: Maximum voltage output to motors.
+ */
+void turnToAngle(double turn_angle, TurnDirection direction, double time_limit_msec, bool exit, double max_output) {
   // Prepare for turn
-  stopChassis(vex::brakeType::coast);
+  hw::stopDrive(hw::Stop::coast);
   beginMotion();
   double threshold = 1;
   PID pid = PID(turn_kp, turn_ki, turn_kd);
 
-  // Normalize and set PID target
-  turn_angle = normalizeTarget(turn_angle);
+  // Pick the target angle for the direction and set the PID target
+  turn_angle = turnTarget(turn_angle, getInertialHeading(), (int)direction);
   pid.setTarget(turn_angle);
   pid.setIntegralMax(0);  
   pid.setIntegralRange(3);
@@ -403,13 +399,11 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
 
   // Draw baseline for visualization
   double draw_amplifier = 230 / fabs(turn_angle);
-  Brain.Screen.clearScreen(black);
-  Brain.Screen.setPenColor(green);
-  Brain.Screen.drawLine(0, fabs(turn_angle) * draw_amplifier, 600, fabs(turn_angle) * draw_amplifier);
-  Brain.Screen.setPenColor(red);
+  hw::screenClear(graph_background);
+  hw::screenLine(0, fabs(turn_angle) * draw_amplifier, 600, fabs(turn_angle) * draw_amplifier, graph_target);
 
   // PID loop for turning
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double output;
   double current_heading = getInertialHeading();
   double previous_heading = 0;
@@ -420,7 +414,7 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
       current_heading = getInertialHeading();
       output = pid.update(current_heading); // PID update for heading
       // Draw heading trace
-      Brain.Screen.drawLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier));
+      hw::screenLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
       // Clamp output
@@ -428,38 +422,38 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
       driveChassis(output, -output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   } else if(exit == false && correct_angle > turn_angle) {
     // Turn left without stopping at end
     while (getInertialHeading() > turn_angle && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
-      Brain.Screen.drawLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier));
+      hw::screenLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
       if(output < min_output) output = min_output;
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
       driveChassis(-output, output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   } else {
     // Standard PID turn
     while (!pid.targetArrived() && motionActive(start_time, time_limit_msec)) {
       current_heading = getInertialHeading();
       output = pid.update(current_heading);
-      Brain.Screen.drawLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier));
+      hw::screenLine(index * 3, fabs(previous_heading) * draw_amplifier, (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
       driveChassis(output, -output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   }
   if(exit) {
-    stopChassis(vex::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   correct_angle = turn_angle;
   endMotion();
@@ -475,7 +469,7 @@ void turnToAngle(double turn_angle, double time_limit_msec, bool exit, double ma
 void driveTo(double distance_in, double time_limit_msec, bool exit, double max_output) {
   // Store initial encoder values
   double start_left = getLeftRotationDegree(), start_right = getRightRotationDegree();
-  stopChassis(vex::brakeType::coast);
+  hw::stopDrive(hw::Stop::coast);
   beginMotion();
   double threshold = 0.5;
   int drive_direction = distance_in > 0 ? 1 : -1;
@@ -519,7 +513,7 @@ void driveTo(double distance_in, double time_limit_msec, bool exit, double max_o
   pid_heading.setDerivativeTolerance(0);
   pid_heading.setArrive(false);
 
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double left_output = 0, right_output = 0, correction_output = 0;
   double current_distance = 0, current_angle = 0;
 
@@ -563,12 +557,12 @@ void driveTo(double distance_in, double time_limit_msec, bool exit, double max_o
     prev_left_output = left_output;
     prev_right_output = right_output;
     driveChassis(left_output, right_output);
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if(exit) {
     prev_left_output = 0;
     prev_right_output = 0;
-    stopChassis(vex::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   endMotion();
 }
@@ -598,7 +592,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
   out_arc = fabs((fabs(center_radius) + (distance_between_wheels / 2)) * result_angle);
   ratio = in_arc / out_arc;
 
-  stopChassis(vex::brakeType::coast);
+  hw::stopDrive(hw::Stop::coast);
   beginMotion();
   double threshold = 0.5;
 
@@ -651,7 +645,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
   pid_turn.setDerivativeTolerance(0);
   pid_turn.setArrive(false);
 
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double left_output = 0, right_output = 0, correction_output = 0;
   double current_right = 0, current_left = 0;
 
@@ -681,7 +675,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
       scaleToMax(left_output, right_output, max_output);
 
       driveChassis(left_output, right_output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   } else if (curve_direction == 1 && exit == true) {
     // Right curve, stop at end
@@ -704,7 +698,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
       scaleToMax(left_output, right_output, max_output);
 
       driveChassis(left_output, right_output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   } else if (curve_direction == -1 && exit == false) {
     // Left curve, chaining (do not stop at end)
@@ -727,7 +721,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
       scaleToMax(left_output, right_output, max_output);
 
       driveChassis(left_output, right_output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   } else {
     // Right curve, chaining (do not stop at end)
@@ -750,12 +744,12 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
       scaleToMax(left_output, right_output, max_output);
 
       driveChassis(left_output, right_output);
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   }
   // Stop the chassis if required
   if(exit == true) {
-    stopChassis(vex::brakeType::hold);
+    hw::stopDrive(hw::Stop::hold);
   }
   // Update the global heading
   correct_angle = result_angle_deg;
@@ -772,7 +766,7 @@ void curveCircle(double result_angle_deg, double center_radius, double time_limi
  * - max_output: Maximum voltage output to motors.
  */
 void swing(double swing_angle, double drive_direction, double time_limit_msec, bool exit, double max_output) {
-  stopChassis(vex::brakeType::coast); // Stop chassis before starting swing
+  hw::stopDrive(hw::Stop::coast); // Stop chassis before starting swing
   beginMotion();
   double threshold = 1;
   PID pid = PID(turn_kp, turn_ki, turn_kd); // Initialize PID for turning
@@ -788,13 +782,11 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
 
   // Draw the baseline for visualization
   double draw_amplifier = 230 / fabs(swing_angle);
-  Brain.Screen.clearScreen(black);
-  Brain.Screen.setPenColor(green);
-  Brain.Screen.drawLine(0, fabs(swing_angle) * draw_amplifier, 600, fabs(swing_angle) * draw_amplifier);
-  Brain.Screen.setPenColor(red);
+  hw::screenClear(graph_background);
+  hw::screenLine(0, fabs(swing_angle) * draw_amplifier, 600, fabs(swing_angle) * draw_amplifier, graph_target);
 
   // Start the PID loop
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double output;
   double current_heading = correct_angle;
   double previous_heading = 0;
@@ -820,9 +812,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       output = pid.update(current_heading);
 
       // Draw heading trace
-      Brain.Screen.drawLine(
+      hw::screenLine(
           index * 3, fabs(previous_heading) * draw_amplifier, 
-          (index + 1) * 3, fabs(current_heading * draw_amplifier));
+          (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
 
@@ -831,9 +823,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
 
-      left_chassis.stop(hold); // Hold left, swing right
-      right_chassis.spin(fwd, output * drive_direction, volt);
-      wait(10, msec);
+      hw::stopLeft(hw::Stop::hold); // Hold left, swing right
+      hw::rightVolts(output * drive_direction);
+      hw::sleepMsec(10);
     }
   } else if(choice == 2 && exit == false) {
     // Swing right, forward
@@ -842,9 +834,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       output = pid.update(current_heading);
 
       // Draw heading trace
-      Brain.Screen.drawLine(
+      hw::screenLine(
           index * 3, fabs(previous_heading) * draw_amplifier, 
-          (index + 1) * 3, fabs(current_heading * draw_amplifier));
+          (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
 
@@ -853,9 +845,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
 
-      left_chassis.spin(fwd, output * drive_direction, volt);
-      right_chassis.stop(hold); // Hold right, swing left
-      wait(10, msec);
+      hw::leftVolts(output * drive_direction);
+      hw::stopRight(hw::Stop::hold); // Hold right, swing left
+      hw::sleepMsec(10);
     }
   } else if(choice == 3 && exit == false) {
     // Swing left, backward
@@ -864,9 +856,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       output = pid.update(current_heading);
 
       // Draw heading trace
-      Brain.Screen.drawLine(
+      hw::screenLine(
           index * 3, fabs(previous_heading) * draw_amplifier, 
-          (index + 1) * 3, fabs(current_heading * draw_amplifier));
+          (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
 
@@ -875,9 +867,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
 
-      left_chassis.spin(fwd, output * drive_direction, volt);
-      right_chassis.stop(hold);
-      wait(10, msec);
+      hw::leftVolts(output * drive_direction);
+      hw::stopRight(hw::Stop::hold);
+      hw::sleepMsec(10);
     }
   } else {
     // Swing right, backward
@@ -886,9 +878,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       output = pid.update(current_heading);
 
       // Draw heading trace
-      Brain.Screen.drawLine(
+      hw::screenLine(
           index * 3, fabs(previous_heading) * draw_amplifier, 
-          (index + 1) * 3, fabs(current_heading * draw_amplifier));
+          (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
       index++;
       previous_heading = current_heading;
 
@@ -897,9 +889,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
       if(output > max_output) output = max_output;
       else if(output < -max_output) output = -max_output;
 
-      left_chassis.stop(hold);
-      right_chassis.spin(fwd, output * drive_direction, volt);
-      wait(10, msec);
+      hw::stopLeft(hw::Stop::hold);
+      hw::rightVolts(output * drive_direction);
+      hw::sleepMsec(10);
     }
   }
 
@@ -909,9 +901,9 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
     output = pid.update(current_heading);
 
     // Draw heading trace
-    Brain.Screen.drawLine(
+    hw::screenLine(
         index * 3, fabs(previous_heading) * draw_amplifier, 
-        (index + 1) * 3, fabs(current_heading * draw_amplifier));
+        (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
     index++;
     previous_heading = current_heading;
 
@@ -922,26 +914,26 @@ void swing(double swing_angle, double drive_direction, double time_limit_msec, b
     // Apply output to correct side based on swing direction
     switch(choice) {
     case 1:
-      left_chassis.stop(hold);
-      right_chassis.spin(fwd, -output * drive_direction, volt);
+      hw::stopLeft(hw::Stop::hold);
+      hw::rightVolts(-output * drive_direction);
       break;
     case 2:
-      left_chassis.spin(fwd, output * drive_direction, volt);
-      right_chassis.stop(hold);
+      hw::leftVolts(output * drive_direction);
+      hw::stopRight(hw::Stop::hold);
       break;
     case 3:
-      left_chassis.spin(fwd, -output * drive_direction, volt);
-      right_chassis.stop(hold);
+      hw::leftVolts(-output * drive_direction);
+      hw::stopRight(hw::Stop::hold);
       break;
     case 4:
-      left_chassis.stop(hold);
-      right_chassis.spin(fwd, output * drive_direction, volt);
+      hw::stopLeft(hw::Stop::hold);
+      hw::rightVolts(output * drive_direction);
       break;
     }
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if(exit == true) {
-    stopChassis(vex::hold); // Stop chassis at end if required
+    hw::stopDrive(hw::Stop::hold); // Stop chassis at end if required
   }
   correct_angle = swing_angle; // Update global heading
   endMotion();
@@ -971,7 +963,7 @@ void correctHeading() {
       output = pid.update(getInertialHeading());
       driveChassis(output, -output); // Apply correction to chassis
     }
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -982,23 +974,35 @@ void correctHeading() {
  * - use_horizontal: true if a horizontal (sideways) tracking wheel is installed.
  * - use_vertical: true if a vertical (forward) tracking wheel is installed.
  *   Without one, the drivetrain encoders measure forward motion instead.
+ * Holonomic drives and H-drives without a horizontal tracking wheel measure sideways motion with
+ * their wheels instead (see strafeEncoderDegrees() in src/holonomic.cpp).
  */
 void runOdometry(bool use_horizontal, bool use_vertical) {
   resetChassis();
   // Start from the current readings so a sensor that wasn't at zero doesn't look like movement
   double prev_heading_deg = getInertialHeading();
   double prev_left_deg = getLeftRotationDegree(), prev_right_deg = getRightRotationDegree();
-  double prev_horizontal_deg = use_horizontal ? horizontal_tracker.position(degrees) : 0;
-  double prev_vertical_deg = use_vertical ? vertical_tracker.position(degrees) : 0;
-  double prev_time = Brain.timer(msec);
+  double prev_horizontal_deg = use_horizontal ? hw::horizontalTrackerDegrees() : 0;
+  double prev_vertical_deg = use_vertical ? hw::verticalTrackerDegrees() : 0;
+  bool wheels_strafe = false;
+  double prev_strafe_deg = 0;
+  double prev_time = hw::timeMsec();
 
   while (true) {
     double heading_deg = getInertialHeading();
     double left_deg = getLeftRotationDegree();
     double right_deg = getRightRotationDegree();
-    double horizontal_deg = use_horizontal ? horizontal_tracker.position(degrees) : 0;
-    double vertical_deg = use_vertical ? vertical_tracker.position(degrees) : 0;
-    double now = Brain.timer(msec);
+    double horizontal_deg = use_horizontal ? hw::horizontalTrackerDegrees() : 0;
+    double vertical_deg = use_vertical ? hw::verticalTrackerDegrees() : 0;
+    // The drive's own sideways measurement, when there's no horizontal tracking wheel to do it
+    bool strafe_from_wheels = !use_horizontal && driveCanStrafe();
+    double strafe_deg = strafe_from_wheels ? strafeEncoderDegrees() : 0;
+    if (strafe_from_wheels != wheels_strafe) {
+      // The drive just started (or stopped) strafing, e.g. useHolonomicDrive() after startOdometry()
+      wheels_strafe = strafe_from_wheels;
+      prev_strafe_deg = strafe_deg;
+    }
+    double now = hw::timeMsec();
 
     if (odom_resync) {
       // setPose() just moved the pose; skip this step so the jump isn't counted as motion
@@ -1008,16 +1012,24 @@ void runOdometry(bool use_horizontal, bool use_vertical) {
       double delta_right_in = (right_deg - prev_right_deg) * wheel_distance_in / 360.0;
       double delta_horizontal_in = (horizontal_deg - prev_horizontal_deg) * horizontal_tracker_diameter * M_PI / 360.0;
       double delta_vertical_in = (vertical_deg - prev_vertical_deg) * vertical_tracker_diameter * M_PI / 360.0;
+      double horizontal_offset = horizontal_tracker_dist_from_center;
+      if (wheels_strafe) {
+        // Strafing measured at the robot's center, like a horizontal tracker there
+        double strafe_in_per_rev = strafe_distance_in > 0 ? strafe_distance_in : wheel_distance_in;
+        delta_horizontal_in = (strafe_deg - prev_strafe_deg) * strafe_in_per_rev / 360.0;
+        horizontal_offset = 0;
+      }
+      bool sideways = use_horizontal || wheels_strafe;
 
       // A wheel can't really travel 3 inches in 10 msec. A jump like that is a glitch, such as a motor
       // briefly disconnecting and resetting its encoder, so skip this step instead of jumping
       double forward_delta_in = use_vertical ? fabs(delta_vertical_in) : fmax(fabs(delta_left_in), fabs(delta_right_in));
-      bool glitch = forward_delta_in > 3 || (use_horizontal && fabs(delta_horizontal_in) > 3);
+      bool glitch = forward_delta_in > 3 || (sideways && fabs(delta_horizontal_in) > 3);
 
       double delta_x_in = 0, delta_y_in = 0;
       if (!glitch) {
         odomStep(prev_heading_deg, heading_deg, delta_left_in, delta_right_in, delta_horizontal_in, delta_vertical_in,
-                 use_horizontal, use_vertical, distance_between_wheels, horizontal_tracker_dist_from_center,
+                 sideways, use_vertical, distance_between_wheels, horizontal_offset,
                  vertical_tracker_dist_from_center, delta_x_in, delta_y_in);
       }
       x_pos += delta_x_in;
@@ -1040,9 +1052,10 @@ void runOdometry(bool use_horizontal, bool use_vertical) {
     prev_right_deg = right_deg;
     prev_horizontal_deg = horizontal_deg;
     prev_vertical_deg = vertical_deg;
+    prev_strafe_deg = strafe_deg;
     prev_time = now;
 
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -1061,14 +1074,21 @@ void trackYOdomWheel() { runOdometry(false, true); }
  * Starts the odometry thread for the tracking wheels enabled in custom/src/robot-config.cpp.
  */
 void startOdometry() {
+  // Only once: a second odometry thread would count every movement twice
+  static bool started = false;
+  if (started) {
+    printf("startOdometry: odometry is already running, so this call does nothing\n");
+    return;
+  }
+  started = true;
   if (using_horizontal_tracker && using_vertical_tracker) {
-    vex::thread odom = vex::thread(trackXYOdomWheel);
+    hw::startThread(trackXYOdomWheel);
   } else if (using_horizontal_tracker) {
-    vex::thread odom = vex::thread(trackXOdomWheel);
+    hw::startThread(trackXOdomWheel);
   } else if (using_vertical_tracker) {
-    vex::thread odom = vex::thread(trackYOdomWheel);
+    hw::startThread(trackYOdomWheel);
   } else {
-    vex::thread odom = vex::thread(trackNoOdomWheel);
+    hw::startThread(trackNoOdomWheel);
   }
 }
 
@@ -1080,7 +1100,7 @@ void startOdometry() {
  * - time_limit_msec: Maximum time allowed for the turn (in milliseconds).
  */
 void turnToPoint(double x, double y, int direction, double time_limit_msec) {
-  stopChassis(vex::brakeType::coast); // Stop chassis before turning
+  hw::stopDrive(hw::Stop::coast); // Stop chassis before turning
   beginMotion();
   double threshold = 1, add = 0;
   if(direction == -1) {
@@ -1100,14 +1120,12 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
 
   // Draw the baseline for visualization
   double draw_amplifier = 230 / fabs(turn_angle);
-  Brain.Screen.clearScreen(black);
-  Brain.Screen.setPenColor(green);
-  Brain.Screen.drawLine(0, fabs(turn_angle) * draw_amplifier, 
-                        600, fabs(turn_angle) * draw_amplifier);
-  Brain.Screen.setPenColor(red);
+  hw::screenClear(graph_background);
+  hw::screenLine(0, fabs(turn_angle) * draw_amplifier, 
+                        600, fabs(turn_angle) * draw_amplifier, graph_target);
 
   // Start the PID loop
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double output;
   double current_heading;
   double previous_heading = 0;
@@ -1119,16 +1137,16 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
     output = pid.update(current_heading);
 
     // Draw heading trace
-    Brain.Screen.drawLine(
+    hw::screenLine(
         index * 3, fabs(previous_heading) * draw_amplifier, 
-        (index + 1) * 3, fabs(current_heading * draw_amplifier));
+        (index + 1) * 3, fabs(current_heading * draw_amplifier), graph_trace);
     index++;
     previous_heading = current_heading;
 
     driveChassis(output, -output); // Apply output to chassis
-    wait(10, msec);
+    hw::sleepMsec(10);
   }  
-  stopChassis(vex::hold); // Stop at end
+  hw::stopDrive(hw::Stop::hold); // Stop at end
   correct_angle = getInertialHeading(); // Update global heading
   endMotion();
 }
@@ -1144,7 +1162,7 @@ void turnToPoint(double x, double y, int direction, double time_limit_msec) {
  * - overturn: If true, allows overturning for sharp turns.
  */
 void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit, double max_output, bool overturn) {
-  stopChassis(vex::brakeType::coast); // Stop chassis before moving
+  hw::stopDrive(hw::Stop::coast); // Stop chassis before moving
   beginMotion();
   double threshold = 0.5;
   int add = dir > 0 ? 0 : 180;
@@ -1190,7 +1208,7 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
   pid_heading.setArrive(false);
 
   // Reset the chassis
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double left_output = 0, right_output = 0, correction_output = 0, prev_left_output = 0, prev_right_output = 0;
   double exittolerance = 1;
   bool perpendicular_line = false, prev_perpendicular_line = true;
@@ -1260,12 +1278,12 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
     prev_left_output = left_output;
     prev_right_output = right_output;
     driveChassis(left_output, right_output); // Apply output to chassis
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if(exit == true) {
     prev_left_output = 0;
     prev_right_output = 0;
-    stopChassis(vex::hold); // Stop at end if required
+    hw::stopDrive(hw::Stop::hold); // Stop at end if required
   }
   correct_angle = getInertialHeading(); // Update global heading
   endMotion();
@@ -1284,7 +1302,7 @@ void moveToPoint(double x, double y, int dir, double time_limit_msec, bool exit,
  * - overturn: If true, allows overturning for sharp turns.
  */
 void boomerang(double x, double y, int dir, double a, double dlead, double time_limit_msec, bool exit, double max_output, bool overturn) {
-  stopChassis(vex::brakeType::coast); // Stop chassis before moving
+  hw::stopDrive(hw::Stop::coast); // Stop chassis before moving
   beginMotion();
   double threshold = 0.5;
   int add = dir > 0 ? 0 : 180;
@@ -1326,7 +1344,7 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
   pid_heading.setDerivativeTolerance(0);
   pid_heading.setArrive(false);
 
-  double start_time = Brain.timer(msec);
+  double start_time = hw::timeMsec();
   double left_output = 0, right_output = 0, correction_output = 0, slip_speed = 0, overturn_value = 0;
   double exit_tolerance = 3;
   bool perpendicular_line = false, prev_perpendicular_line = true;
@@ -1411,12 +1429,12 @@ void boomerang(double x, double y, int dir, double a, double dlead, double time_
     prev_left_output = left_output;
     prev_right_output = right_output;
     driveChassis(left_output, right_output); // Apply output to chassis
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
   if(exit) {
     prev_left_output = 0;
     prev_right_output = 0;
-    stopChassis(vex::hold); // Stop at end if required
+    hw::stopDrive(hw::Stop::hold); // Stop at end if required
   }
   correct_angle = a;      // Update global heading
   endMotion();
@@ -1444,7 +1462,7 @@ void runMcl() {
   double last_motion_x = odom_motion_x, last_motion_y = odom_motion_y, last_heading = getInertialHeading();
   double moved_since_correct = 0;
 
-  vex::distance* sensors[4] = {&front_sensor, &right_sensor, &back_sensor, &left_sensor};
+  const hw::DistanceSensor sensors[4] = {hw::front_distance, hw::right_distance, hw::back_distance, hw::left_distance};
   double sensor_x[4] = {front_sensor_offsetX, right_sensor_offsetX, back_sensor_offsetX, left_sensor_offsetX};
   double sensor_y[4] = {front_sensor_offsetY, right_sensor_offsetY, back_sensor_offsetY, left_sensor_offsetY};
   double sensor_angle[4] = {0, 90, 180, 270};
@@ -1470,7 +1488,7 @@ void runMcl() {
 
     // Run the filter every 30 msec (about how often the distance sensors update)
     if (tick % 3 == 0) {
-      uint64_t cycle_start = vex::timer::systemHighResolution();
+      uint64_t cycle_start = hw::timeMicros();
       double delta_x = odom_motion_x - last_motion_x, delta_y = odom_motion_y - last_motion_y;
       double delta_heading = heading - last_heading;
       last_motion_x = odom_motion_x;
@@ -1489,11 +1507,11 @@ void runMcl() {
       MclReading readings[4];
       int count = 0;
       for (int i = 0; i < 4; i++) {
-        if (!sensors[i]->installed() || !sensors[i]->isObjectDetected()) {
+        if (!hw::distanceInstalled(sensors[i]) || !hw::distanceDetected(sensors[i])) {
           continue;
         }
-        double reading_in = sensors[i]->objectDistance(inches) * distance_sensor_scale;
-        uint32_t stamp = sensors[i]->timestamp();
+        double reading_in = hw::distanceInches(sensors[i]) * distance_sensor_scale;
+        uint32_t stamp = hw::distanceTimestamp(sensors[i]);
         bool repeat = stamp == last_stamp[i] || reading_in == last_reading[i];
         last_stamp[i] = stamp;
         last_reading[i] = reading_in;
@@ -1522,11 +1540,11 @@ void runMcl() {
       mclEstimate(mcl_x, mcl_y, spread_x, spread_y);
       mcl_spread = fmax(spread_x, spread_y);
       mclNudge(x_pos, y_pos, mcl_x, mcl_y, spread_x, spread_y);
-      mcl_cycle_msec = 0.8 * mcl_cycle_msec + 0.2 * (vex::timer::systemHighResolution() - cycle_start) / 1000.0;
+      mcl_cycle_msec = 0.8 * mcl_cycle_msec + 0.2 * (hw::timeMicros() - cycle_start) / 1000.0;
     }
 
     tick++;
-    wait(10, msec);
+    hw::sleepMsec(10);
   }
 }
 
@@ -1536,7 +1554,7 @@ void runMcl() {
  * field-centered coordinates (origin at the field center, walls at +/-70.25 in).
  */
 void startMcl() {
-  vex::thread mcl = vex::thread(runMcl);
+  hw::startThread(runMcl);
 }
 
 // ============================================================================
@@ -1544,13 +1562,14 @@ void startMcl() {
 // ============================================================================
 
 /*
- * resetPositionWithSensor
- * Resets X or Y using one distance sensor and the field wall its beam hits.
+ * resetPositionWithReading
+ * Resets X or Y using one distance sensor reading and the field wall its beam hits.
  * The current position estimate decides which wall that is, so angled readings
  * and readings near corners work. Needs field-centered coordinates (see setPose()).
  * Returns true if the position was reset, false if the reading was skipped.
+ * resetPositionWithSensor() (in the platform's hardware.cpp) reads a sensor and calls this.
  *
- * - sensor: Distance sensor to use
+ * - raw_reading_in: What the sensor measured (in inches, before distance_sensor_scale)
  * - s_x, s_y: Sensor position relative to the robot's center (in inches, +x = right, +y = forward)
  * - sensor_angle_offset: Direction the sensor faces on the robot (0° = front, 90° = right, 180° = back, 270° = left)
  * - field_half_size: Distance from the field center to each wall (in inches)
@@ -1558,12 +1577,9 @@ void startMcl() {
  ** - IMPORTANT NOTE FOR THE USER - **
  * - DO NOT CALL THIS FUNCTION DIRECTLY, use the specific direction functions below instead.
  */
-bool resetPositionWithSensor(vex::distance& sensor, double s_x, double s_y, double sensor_angle_offset, double field_half_size) {
+bool resetPositionWithReading(double raw_reading_in, double s_x, double s_y, double sensor_angle_offset, double field_half_size) {
   // The V5 distance sensor reads up to about 2000 mm (78 in); anything else means no wall was seen
-  if (!sensor.isObjectDetected()) {
-    return false;
-  }
-  double reading_in = sensor.objectDistance(inches) * distance_sensor_scale;
+  double reading_in = raw_reading_in * distance_sensor_scale;
   if (reading_in <= 0 || reading_in > 78) {
     return false;
   }
@@ -1586,25 +1602,33 @@ bool resetPositionWithSensor(vex::distance& sensor, double s_x, double s_y, doub
   return true;
 }
 
+// Resets the position with one of the four reset sensors, if it sees something
+bool resetPositionFrom(hw::DistanceSensor sensor, double s_x, double s_y, double sensor_angle_offset) {
+  if (!hw::distanceDetected(sensor)) {
+    return false;
+  }
+  return resetPositionWithReading(hw::distanceInches(sensor), s_x, s_y, sensor_angle_offset, field_half_size);
+}
+
 /*
  * resetPositionFront / resetPositionBack / resetPositionLeft / resetPositionRight
  * Reset position using the distance sensor on that side of the robot.
  * Each returns true if the position was reset.
  */
 bool resetPositionFront() {
-  return resetPositionWithSensor(front_sensor, front_sensor_offsetX, front_sensor_offsetY, 0.0, field_half_size);
+  return resetPositionFrom(hw::front_distance, front_sensor_offsetX, front_sensor_offsetY, 0.0);
 }
 
 bool resetPositionBack() {
-  return resetPositionWithSensor(back_sensor, back_sensor_offsetX, back_sensor_offsetY, 180.0, field_half_size);
+  return resetPositionFrom(hw::back_distance, back_sensor_offsetX, back_sensor_offsetY, 180.0);
 }
 
 bool resetPositionLeft() {
-  return resetPositionWithSensor(left_sensor, left_sensor_offsetX, left_sensor_offsetY, 270.0, field_half_size);
+  return resetPositionFrom(hw::left_distance, left_sensor_offsetX, left_sensor_offsetY, 270.0);
 }
 
 bool resetPositionRight() {
-  return resetPositionWithSensor(right_sensor, right_sensor_offsetX, right_sensor_offsetY, 90.0, field_half_size);
+  return resetPositionFrom(hw::right_distance, right_sensor_offsetX, right_sensor_offsetY, 90.0);
 }
 
 // ============================================================================

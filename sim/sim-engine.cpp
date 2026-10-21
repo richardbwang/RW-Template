@@ -1,10 +1,11 @@
-// RW-Template simulator engine: a cooperative scheduler on a simulated clock, tank-drive
-// physics, and simulated sensors. The fake VEX classes in vex/v5_vcs.h call into this.
+// RW-Template simulator engine: a cooperative scheduler on a simulated clock, drive physics (tank,
+// holonomic and H-drives), and simulated sensors. The stand-in VEX and PROS classes (vex/v5_vcs.h,
+// pros/pros-sim.h) call into this.
 //
 // Threads: every VEX thread is a real OS thread, but only one runs at a time, and it hands
 // off whenever it calls wait() (like VEXos's cooperative scheduler). When every thread is
 // waiting, the clock jumps to the earliest wake-up and the physics catches up in 1 msec steps.
-#include "v5_vcs.h"
+#include "sim-hooks.h"
 #include "sim-engine.h"
 
 #include <algorithm>
@@ -93,6 +94,11 @@ ImuState& imuAt(int32_t port) {
 }
 DriveModel drive_model;                          // Drivetrain physics (see drive-model.h)
 DriveSide sides[2];                              // Left/right wheel and ground speeds (in/s)
+std::vector<int32_t> corner_ports;               // Holonomic drive: left front, right front, left back, right back
+DriveSide corner_sides[4];
+int32_t strafe_port = -1;                        // H-drive strafe wheel
+DriveSide strafe_side;
+double strafe_ratio = 1;                         // Sideways travel per wheel travel
 double turn_rate = 0;                            // rad/s
 double imu_scale_error = 1.0, imu_drift_dps = 0;
 
@@ -186,17 +192,43 @@ void physicsStep(double dt) {
   }
 
   // Drive: friction, motor lag and current limit, wheel slip, scrub and skid (drive-model.h)
-  for (int s = 0; s < 2; s++) {
-    int mode = DRIVE_BRAKE;
-    double volts = 0;
-    sideCommand(s == 0 ? robot.left_ports : robot.right_ports, mode, volts);
-    stepDriveSide(drive_model, sides[s], mode, volts, dt);
-  }
   double v = 0, w = 0, lateral = 0;
-  driveMotion(drive_model, sides[0], sides[1], robot.track_width_in, v, w, lateral);
+  if (corner_ports.size() == 4) {
+    // Holonomic drive: each corner wheel follows its motor, and together they move the robot
+    // forward, sideways and around (driveHolonomic()'s mix, run backward)
+    for (int c = 0; c < 4; c++) {
+      int mode = DRIVE_BRAKE;
+      double volts = 0;
+      sideCommand({corner_ports[c]}, mode, volts);
+      stepDriveSide(drive_model, corner_sides[c], mode, volts, dt);
+    }
+    const DriveSide* s = corner_sides;
+    v = (s[0].ground + s[1].ground + s[2].ground + s[3].ground) / 4.0 * drive_model.tread_slip;
+    lateral = (s[0].ground - s[1].ground - s[2].ground + s[3].ground) / 4.0 * strafe_ratio * drive_model.tread_slip;
+    w = (s[0].ground - s[1].ground + s[2].ground - s[3].ground) / 2.0 / robot.track_width_in * drive_model.turn_scrub;
+  } else {
+    for (int s = 0; s < 2; s++) {
+      int mode = DRIVE_BRAKE;
+      double volts = 0;
+      sideCommand(s == 0 ? robot.left_ports : robot.right_ports, mode, volts);
+      stepDriveSide(drive_model, sides[s], mode, volts, dt);
+    }
+    driveMotion(drive_model, sides[0], sides[1], robot.track_width_in, v, w, lateral);
+  }
   if (world.realistic) {
     v *= 1 + gauss(0.01);
     w *= 1 + gauss(0.01);
+  }
+  if (strafe_port >= 0) {
+    // H-drive: the strafe wheel pushes the robot sideways
+    int mode = DRIVE_BRAKE;
+    double volts = 0;
+    sideCommand({strafe_port}, mode, volts);
+    stepDriveSide(drive_model, strafe_side, mode, volts, dt);
+    lateral += strafe_side.ground * strafe_ratio * drive_model.tread_slip;
+  }
+  if (world.realistic && (corner_ports.size() == 4 || strafe_port >= 0)) {
+    lateral *= 1 + gauss(0.01);
   }
   double avg = true_heading + w * dt / 2.0;
   double dx = (v * std::sin(avg) + lateral * std::cos(avg)) * dt;
@@ -215,12 +247,25 @@ void physicsStep(double dt) {
   turn_rate = w;
 
   // Drive encoders measure the wheels, not the robot
-  for (int s = 0; s < 2; s++) {
-    for (int32_t p : (s == 0 ? robot.left_ports : robot.right_ports)) {
-      MotorState& m = motors()[p];
-      m.rpm = sides[s].wheel / robot.inches_per_motor_rev * 60.0;
+  if (corner_ports.size() == 4) {
+    for (int c = 0; c < 4; c++) {
+      MotorState& m = motors()[corner_ports[c]];
+      m.rpm = corner_sides[c].wheel / robot.inches_per_motor_rev * 60.0;
       m.raw_deg += m.rpm * 6.0 * dt;
     }
+  } else {
+    for (int s = 0; s < 2; s++) {
+      for (int32_t p : (s == 0 ? robot.left_ports : robot.right_ports)) {
+        MotorState& m = motors()[p];
+        m.rpm = sides[s].wheel / robot.inches_per_motor_rev * 60.0;
+        m.raw_deg += m.rpm * 6.0 * dt;
+      }
+    }
+  }
+  if (strafe_port >= 0) {
+    MotorState& m = motors()[strafe_port];
+    m.rpm = strafe_side.wheel / robot.inches_per_motor_rev * 60.0;
+    m.raw_deg += m.rpm * 6.0 * dt;
   }
 
   // Tracking wheels measure the robot's real motion at their mounting spots
@@ -547,6 +592,18 @@ void setup(const RobotSetup& robot_setup, const WorldSetup& world_setup, const B
     }
   }
   configured = true;
+}
+
+void useHolonomicDrive(const std::vector<int32_t>& ports, double ratio) {
+  corner_ports = ports;
+  strafe_ratio = ratio;
+  for (int32_t p : corner_ports) motors()[p].drive = true;
+}
+
+void useStrafeWheel(int32_t port, double ratio) {
+  strafe_port = port;
+  strafe_ratio = ratio;
+  motors()[port].drive = true;
 }
 
 void setCompetition(bool enabled, bool autonomous) {

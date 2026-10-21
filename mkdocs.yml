@@ -1,0 +1,118 @@
+# Docs site for RW-Template, built with MkDocs Material and published to GitHub Pages by
+# .github/workflows/docs.yml. Preview it locally (see docs/build-replays.sh for the replays):
+#   pip install -r docs/requirements.txt
+#   mkdocs serve
+site_name: RW-Template
+site_url: https://richardbwang.github.io/RW-Template/
+site_description: A VEX V5 autonomous template with odometry, path following, MCL and a simulator.
+repo_url: https://github.com/richardbwang/RW-Template
+repo_name: richardbwang/RW-Template
+edit_uri: edit/main/docs/
+copyright: MIT License
+
+# The replay script and its output folder's helper aren't pages
+exclude_docs: |
+  build-replays.sh
+  requirements.txt
+
+# The previous home page, kept at /home-classic/ to compare with the new one. Delete once picked.
+not_in_nav: |
+  home-classic.md
+
+theme:
+  name: material
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.action.edit
+    - toc.follow
+  icon:
+    repo: fontawesome/brands/github
+
+extra_css:
+  - stylesheets/extra.css
+extra_javascript:
+  - javascripts/replay.js
+  - javascripts/home.js
+  - javascripts/pid-playground.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/richardbwang/RW-Template
+      name: GitHub
+    - icon: fontawesome/brands/discord
+      link: https://discord.gg/9FHyyFe22p
+      name: Join the Discord
+    - icon: fontawesome/brands/youtube
+      link: https://www.youtube.com/@1698V
+      name: 1698V on YouTube
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation and Updating: getting-started/installation.md
+      - Using PROS: getting-started/pros.md
+      - Quick Start: getting-started/quick-start.md
+      - What's New: getting-started/whats-new.md
+  - Guide:
+      - Project Structure: guide/project-structure.md
+      - Robot Configuration: guide/configuration.md
+      - Drive Types: guide/drive-types.md
+      - Tuning Your Robot: guide/tuning.md
+      - PID Playground: guide/pid-playground.md
+      - Autonomous Programming: guide/autonomous.md
+      - Async Motions: guide/async-motions.md
+      - Motion Profiles: guide/motion-profiles.md
+      - Path Following: guide/path-following.md
+      - Localization: guide/localization.md
+      - Driver Control: guide/driver-control.md
+      - Competition Setup: guide/competition.md
+  - Simulator:
+      - Running the Simulator: simulator/running.md
+      - Calibrating to Your Robot: simulator/calibration.md
+      - Replay Gallery: simulator/replays.md
+      - Testing on a Computer: simulator/testing.md
+  - Credits: credits.md

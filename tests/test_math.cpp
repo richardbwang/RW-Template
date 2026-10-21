@@ -139,9 +139,44 @@ static void testDistanceReset() {
   CHECK(distanceResetPosition(60, 60, 270, 0, 0, 0, 130.5, half, 40, 18, p) == 0, "hit 10 in from the corner should be skipped");
 }
 
+// ---------------------------------------------------------------------------
+// Turn targets: the short way, or the way the auton picked (turnToAngle with clockwise and
+// counterclockwise)
+// ---------------------------------------------------------------------------
+static void checkTurn(double angle, double heading, int direction, double expected) {
+  double target = turnTarget(angle, heading, direction);
+  CHECK(fabs(target - expected) < 1e-9, "turnTarget(%g, %g, %d) = %g, want %g", angle, heading, direction, target, expected);
+}
+
+static void testTurnTarget() {
+  // The short way, from any number of turns away
+  checkTurn(90, 0, 0, 90);
+  checkTurn(90, 720, 0, 810);
+  checkTurn(-90, 400, 0, 270);
+  // A turn of about 180: the short way flips with a fraction of a degree of heading...
+  checkTurn(180, 0.3, 0, 180);
+  checkTurn(180, -0.3, 0, -180);
+  // ...but a picked direction doesn't
+  checkTurn(180, 0.3, 1, 180);
+  checkTurn(180, -0.3, 1, 180);
+  checkTurn(180, 0.3, -1, -180);
+  checkTurn(180, -0.3, -1, -180);
+  checkTurn(180, 360.4, 1, 540);
+  // The long way around, when picked
+  checkTurn(90, 0, -1, -270);
+  checkTurn(-90, 0, 1, 270);
+  // Already up to 5 degrees past the target: the short way back, not a spin almost all the way around
+  checkTurn(90, 93, 1, 90);
+  checkTurn(90, 87, -1, 90);
+  // Further past: the way picked
+  checkTurn(90, 100, 1, 450);
+  checkTurn(90, 80, -1, -270);
+}
+
 int main() {
   testOdometry();
   testDistanceReset();
+  testTurnTarget();
   if (failures == 0) printf("ALL TESTS PASSED\n");
   else printf("%d FAILURES\n", failures);
   return failures != 0;

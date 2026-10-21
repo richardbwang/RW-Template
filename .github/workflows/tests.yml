@@ -1,5 +1,5 @@
 # Builds and runs the computer-side tools (tests and simulator) on Linux with GCC, the setup the
-# README points Windows users to through WSL, and on macOS with Apple clang.
+# docs point Windows users to through WSL, and on macOS with Apple clang.
 # The robot code itself is still built for the V5 Brain with the VEX extension; this doesn't do that.
 name: Tests
 
@@ -51,6 +51,12 @@ jobs:
             echo "::endgroup::"
           done < "$RUNNER_TEMP/autons.txt"
           exit $status
+
+      # X-drive, mecanum and H-drive in the VEXcode and PROS projects. Only the RW-Template repository
+      # has this test (RW-Template.zip doesn't), so teams' projects skip it
+      - name: Drive types
+        if: ${{ !cancelled() && hashFiles('tests/test-drive-types.sh') != '' }}
+        run: sh tests/test-drive-types.sh
 
       # Download from the run's Summary page and open the .html files in a browser
       - name: Upload simulator replays

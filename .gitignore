@@ -2,6 +2,16 @@
 /build
 compile_commands.json
 .DS_Store
-/.vscode
+# VS Code: only the project files that go in the release zip
+/.vscode/*
+!/.vscode/c_cpp_properties.json
+!/.vscode/extensions.json
+!/.vscode/settings.json
+!/.vscode/tasks.json
+!/.vscode/vex_project_settings.json
+# Copies the updater (tools/update.sh) saves of RW files you had changed
+/rw-backup
 /sim/build
 /sim/out
+/site
+/docs/replays

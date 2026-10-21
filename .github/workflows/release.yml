@@ -1,0 +1,175 @@
+# Builds both downloads and tests them:
+# - RW-Template.zip for VEXcode (tools/build-release.sh), testing its updater (tools/update.sh and
+#   tools/update.ps1) on Linux, macOS and Windows
+# - RW-Template@<version>.zip, the PROS template (tools/build-pros-template.sh), testing it in a
+#   new PROS project
+# When you publish a release, it attaches both to it once the tests pass, then updates the PROS
+# depot (the depot branch's stable.json) so "pros c apply RW-Template" finds the new version.
+# To redo the downloads of an existing release, run this workflow from the Actions tab with its tag.
+name: Release downloads
+
+on:
+  push:
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag of the release to build the zip for (for example 4.1.0)
+        required: true
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ github.event.release.tag_name || inputs.tag }}
+
+jobs:
+  zip:
+    name: Build the zip and test the updater (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Build RW-Template.zip
+        run: sh tools/build-release.sh "${TAG:-dev}" RW-Template.zip
+
+      - name: Test tools/update.sh
+        run: sh tests/test-update.sh
+
+      # The same checks on the Windows updater, with the PowerShell this runner has
+      - name: Test tools/update.ps1 with PowerShell 7
+        run: RW_TEST_POWERSHELL=pwsh sh tests/test-update.sh
+
+      # Windows has no zip command, so the Windows job tests with zips made here
+      - name: Make the test zips for Windows
+        run: sh tests/test-update.sh --fixtures "$RUNNER_TEMP/updater-test-zips"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RW-Template
+          path: RW-Template.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: updater-test-zips
+          path: ${{ runner.temp }}/updater-test-zips
+          retention-days: 1
+
+  macos:
+    name: Test the updater (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Test tools/update.sh
+        run: sh tests/test-update.sh
+
+  windows:
+    name: Test the updater (Windows PowerShell)
+    needs: zip
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: updater-test-zips
+          path: updater-test-zips
+
+      # Git Bash runs the checks; the updater runs in Windows PowerShell 5, like on team laptops
+      - name: Test tools/update.ps1
+        shell: bash
+        run: RW_TEST_POWERSHELL=powershell.exe RW_TEST_FIXTURES=updater-test-zips sh tests/test-update.sh
+
+  pros:
+    name: Build the PROS template and test it in a new project
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ARM_TOOLCHAIN: 14.3.rel1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # pros-cli still needs pkg_resources, which newer setuptools don't have
+      - name: Install the PROS CLI
+        run: pip install "pros-cli==3.5.6" "setuptools<81"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/arm-toolchain
+          key: arm-gnu-toolchain-${{ env.ARM_TOOLCHAIN }}
+
+      - name: Install the ARM toolchain
+        run: |
+          if [ ! -x ~/arm-toolchain/bin/arm-none-eabi-g++ ]; then
+            mkdir -p ~/arm-toolchain
+            curl -fsSL "https://developer.arm.com/-/media/Files/downloads/gnu/$ARM_TOOLCHAIN/binrel/arm-gnu-toolchain-$ARM_TOOLCHAIN-x86_64-arm-none-eabi.tar.xz" \
+              | tar -xJ -C ~/arm-toolchain --strip-components=1
+          fi
+          echo "$HOME/arm-toolchain/bin" >> "$GITHUB_PATH"
+
+      - name: Build the PROS template
+        run: sh tools/build-pros-template.sh "${TAG:-0.0.0}" "$RUNNER_TEMP/pros-template"
+
+      - name: Test it in a new PROS project
+        run: sh tests/test-pros-template.sh "$RUNNER_TEMP"/pros-template/RW-Template@*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RW-Template-PROS
+          path: ${{ runner.temp }}/pros-template/*.zip
+
+  publish:
+    name: Attach the downloads to the release
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
+    needs: [zip, macos, windows, pros]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: RW-Template
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: RW-Template-PROS
+
+      - name: Upload RW-Template.zip and the PROS template
+        run: gh release upload "$TAG" RW-Template.zip RW-Template@*.zip --clobber --repo "$GITHUB_REPOSITORY"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  depot:
+    name: Update the PROS depot
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      # Lists every release's PROS template in stable.json (beta.json for pre-releases) on the depot branch
+      - uses: LemLib/pros-depot@v0.1.0-beta.1
+        with:
+          token: ${{ github.token }}
+          repo: ${{ github.repository }}
+          source-repo: ${{ github.repository }}
+          readable-json: true

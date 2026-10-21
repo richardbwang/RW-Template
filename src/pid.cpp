@@ -1,5 +1,5 @@
 #include "pid.h"
-#include "vex.h"
+#include "hardware.h"
 #include "utils.h"
 
 #include <cmath>
@@ -96,8 +96,8 @@ double PID::update(double input) {
     // Need to skip derivative. 
     previous_error = current_error;
     sum_error = 0;
-    small_check_time = Brain.timer(msec);
-    big_check_time = Brain.timer(msec);
+    small_check_time = hw::timeMsec();
+    big_check_time = hw::timeMsec();
   }
 
   // Calculate proportional
@@ -136,22 +136,22 @@ double PID::update(double input) {
       fabs(derivative) <= derivative_tolerance) { 
     // Exit when staying in tolerated region and 
     // maintaining a low enough speed for enough time
-    if (Brain.timer(msec) - small_check_time >= small_error_duration) {
+    if (hw::timeMsec() - small_check_time >= small_error_duration) {
       arrived = true;
     }
   } else {
-    small_check_time = Brain.timer(msec);
+    small_check_time = hw::timeMsec();
   }
 
   if (arrive == true && fabs(current_error) <= big_error_tolerance && 
       fabs(derivative) <= derivative_tolerance) { 
     // Exit when staying in tolerated region and 
     // maintaining a low enough speed for enough time
-    if (Brain.timer(msec) - big_check_time >= big_error_duration) {
+    if (hw::timeMsec() - big_check_time >= big_error_duration) {
       arrived = true;
     }
   } else {
-    big_check_time = Brain.timer(msec);
+    big_check_time = hw::timeMsec();
   }
 
   output = proportional + integral + derivative;

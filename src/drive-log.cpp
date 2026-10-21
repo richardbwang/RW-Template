@@ -1,4 +1,4 @@
-#include "vex.h"
+#include "hardware.h"
 #include <stdio.h>
 #include <string.h>
 #include "motor-control.h"
@@ -55,34 +55,32 @@ void calibrateDrive() {
                      horizontal_tracker_dist_from_center, vertical_tracker_dist_from_center,
                      horizontal_tracker_diameter, vertical_tracker_diameter);
 
-  Brain.Screen.clearScreen();
-  Brain.Screen.setCursor(1, 1);
-  Brain.Screen.print("Calibrating the drive for the simulator...");
-  double start = Brain.timer(msec);
+  hw::screenClear(0x000000);
+  hw::screenRow(1, "Calibrating the drive for the simulator...");
+  double start = hw::timeMsec();
   int rows = 0;
   for (const CalibrationStep& step : calibration_steps) {
-    double step_start = Brain.timer(msec);
-    while (Brain.timer(msec) - step_start < step.seconds * 1000 && rows < max_rows) {
-      double f = (Brain.timer(msec) - step_start) / (step.seconds * 1000);
+    double step_start = hw::timeMsec();
+    while (hw::timeMsec() - step_start < step.seconds * 1000 && rows < max_rows) {
+      double f = (hw::timeMsec() - step_start) / (step.seconds * 1000);
       double left = step.left_start + (step.left_end - step.left_start) * f;
       double right = step.right_start + (step.right_end - step.right_start) * f;
       if (step.mode == 0) driveChassis(left, right);
-      else stopChassis(step.mode == 1 ? vex::brake : vex::coast);
+      else hw::stopDrive(step.mode == 1 ? hw::Stop::brake : hw::Stop::coast);
       length += snprintf(log_text + length, sizeof(log_text) - length, "%.3f,%d,%.3f,%.3f,%.2f,%.2f,%.3f,%.2f,%.2f\n",
-                         (Brain.timer(msec) - start) / 1000.0, step.mode, step.mode == 0 ? left : 0, step.mode == 0 ? right : 0,
-                         getLeftRotationDegree(), getRightRotationDegree(), inertial_sensor.rotation(degrees),
-                         horizontal_tracker.position(degrees), vertical_tracker.position(degrees));
+                         (hw::timeMsec() - start) / 1000.0, step.mode, step.mode == 0 ? left : 0, step.mode == 0 ? right : 0,
+                         getLeftRotationDegree(), getRightRotationDegree(), hw::imuDegrees(),
+                         hw::horizontalTrackerDegrees(), hw::verticalTrackerDegrees());
       rows++;
-      wait(10, msec);
+      hw::sleepMsec(10);
     }
   }
-  stopChassis(vex::brake);
+  hw::stopDrive(hw::Stop::brake);
 
-  Brain.Screen.setCursor(2, 1);
-  if (Brain.SDcard.isInserted() && Brain.SDcard.savefile("rw_drive_log.csv", (uint8_t*)log_text, length) > 0) {
-    Brain.Screen.print("Saved rw_drive_log.csv to the SD card (%d rows)", rows);
+  if (hw::sdSave("rw_drive_log.csv", log_text, length)) {
+    hw::screenRow(2, "Saved rw_drive_log.csv to the SD card (%d rows)", rows);
   } else {
-    Brain.Screen.print("No SD card: printing the log to the terminal");
+    hw::screenRow(2, "No SD card: printing the log to the terminal");
     printf("%s", log_text);
   }
 }

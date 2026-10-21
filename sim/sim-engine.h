@@ -50,6 +50,11 @@ namespace rwsim {
 
   void adoptMainThread();
   void setup(const RobotSetup& robot, const WorldSetup& world, const BeliefSource& belief);
+  // A holonomic drive's corner motors (left front, right front, left back, right back), or an H-drive's
+  // strafe motor. Set after runPreAutonomous(), where useHolonomicDrive() and useHDrive() run.
+  // strafe_ratio = strafe_distance_in / wheel_distance_in
+  void useHolonomicDrive(const std::vector<int32_t>& corner_ports, double strafe_ratio);
+  void useStrafeWheel(int32_t port, double strafe_ratio);
   void setCompetition(bool enabled, bool autonomous);
   void startRecording(const std::string& name, const std::string& viewer_path, const std::string& output_path);
   [[noreturn]] void finishRun(const std::string& reason);

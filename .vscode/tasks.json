@@ -1,0 +1,24 @@
+{
+	// Terminal > Run Task > Update RW-Template downloads the newest RW-Template and updates this
+	// project. Your custom folder stays as it is. See tools/update.sh for what it does.
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Update RW-Template",
+			"detail": "Download the newest RW-Template and update this project. Your custom folder stays as it is.",
+			"type": "process",
+			"command": "/bin/sh",
+			"args": ["${workspaceFolder}/tools/update.sh"],
+			"windows": {
+				"command": "powershell.exe",
+				"args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}\\tools\\update.ps1"]
+			},
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"clear": true
+			}
+		}
+	]
+}

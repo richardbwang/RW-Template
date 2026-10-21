@@ -1,0 +1,3 @@
+# Made when you run the simulator (run-sim.sh) or the profile fitter (fit-profile.sh)
+build/
+out/

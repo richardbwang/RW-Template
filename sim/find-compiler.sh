@@ -4,7 +4,7 @@ CXX="${CXX:-c++}"
 if ! command -v "$CXX" >/dev/null 2>&1; then
   echo "No C++ compiler found (looked for \"$CXX\"). Install one, then run this again:"
   echo "  macOS:   xcode-select --install"
-  echo "  Windows: type wsl in the terminal first (see the Simulator section of README.md)"
+  echo "  Windows: type wsl in the terminal first (see richardbwang.github.io/RW-Template/simulator/running/)"
   echo "  Linux:   sudo apt install g++"
   exit 1
 fi

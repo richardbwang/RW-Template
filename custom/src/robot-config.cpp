@@ -27,6 +27,8 @@ motor right_chassis1 = motor(PORT4, ratio6_1, false);
 motor right_chassis2 = motor(PORT5, ratio6_1, false);
 motor right_chassis3 = motor(PORT6, ratio6_1, true);
 motor_group right_chassis = motor_group(right_chassis1, right_chassis2, right_chassis3);
+// X-drive, mecanum or H-drive: see the docs (Guide > Drive Types) for the motors to make here and
+// the line to add to runPreAutonomous() in custom/src/user.cpp
 
 inertial inertial_sensor = inertial(PORT7);
 optical example_optical_sensor = optical(PORT8);
@@ -62,9 +64,11 @@ digital_out mogo_mech = digital_out(Brain.ThreeWirePort.D);
 // ============================================================================
 
 // Distance between the middles of the left and right wheels of the drive (in inches)
+// (mecanum: plus the distance between the front and back wheels, see the docs: Guide > Drive Types)
 double distance_between_wheels = 12.3;
 
 // motor to wheel gear ratio * wheel diameter (in inches) * pi
+// (X-drive: also * 0.707, see the docs: Guide > Drive Types)
 double wheel_distance_in = (36.0 / 48.0) * 3.17 * M_PI;
 
 // PID Constants for movement
@@ -185,9 +189,13 @@ double profile_turn_accel = 1200;      // turnProfiled acceleration (degrees/s^2
 double path_lookahead = 12;            // Pure pursuit lookahead (inches): bigger = smoother, smaller = tighter
 double path_max_lateral_accel = 120;   // Slows down in curves so the robot doesn't slide (in/s^2)
 
-// Driver control feel, used by driverTank() and driverArcade()
+// Driver control feel, used by driverTank(), driverArcade() and driverHolonomic()
 double driver_curve = 0;     // 0 = linear, higher = finer control at low stick values (2-6 is typical)
 double driver_deadband = 3;  // Stick values below this (percent) count as zero
+
+// X-drives, mecanum drives and H-drives (see the docs: Guide > Drive Types): how far the robot moves
+// sideways per revolution of a strafing motor (inches). 0 = the same as wheel_distance_in, right for an X-drive
+double strafe_distance_in = 0;
 
 // ============================================================================
 // DO NOT CHANGE ANYTHING BELOW

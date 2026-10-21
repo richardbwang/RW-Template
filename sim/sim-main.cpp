@@ -1,8 +1,14 @@
 // RW-Template simulator: runs your autonomous routines on a simulated robot and field and
-// writes an HTML replay. Run it with: sh sim/run-sim.sh "Auton Name"   (see README)
+// writes an HTML replay. Run it with: sh sim/run-sim.sh "Auton Name"   (see the docs)
+#ifdef RW_SIM_PROS
+// A PROS project (sim/run-sim.sh builds it with the stand-in PROS API in sim/pros/pros-sim.h)
+#include "main.h"
+#include "rw/api.h"
+#else
 #include "vex.h"
 #include "motor-control.h"
 #include "../custom/include/user.h"
+#endif
 #include "sim-engine.h"
 
 #include <cctype>
@@ -11,15 +17,40 @@
 #include <cstring>
 #include <string>
 
-// Normally defined in src/main.cpp, which the simulator replaces
+#ifndef RW_SIM_PROS
+// Normally defined in src/vexcode/main.cpp, which the simulator replaces
 vex::competition Competition;
+#endif
 
 // Auton selector internals (src/auton-selector.cpp)
 extern const char* auton_names[];
 extern int auton_count;
 extern int selected_auton;
 
+// The motors from useHolonomicDrive() and useHDrive() (src/vexcode/hardware.cpp, or rw/hardware.cpp on PROS), or nullptr
+#ifdef RW_SIM_PROS
+pros::Motor* holonomicMotor(int index);
+pros::Motor* hDriveMotor();
+#else
+vex::motor* holonomicMotor(int index);
+vex::motor* hDriveMotor();
+#endif
+
 namespace {
+
+// How the robot's code starts. PROS runs initialize() and autonomous() in src/main.cpp; on VEXcode,
+// src/vexcode/main.cpp calls runPreAutonomous() and runAutonomous() in custom/src/user.cpp
+#ifdef RW_SIM_PROS
+const char* auton_function = "autonomous";
+void startRobot() { initialize(); }
+void runAuton() { autonomous(); }
+void waitMsec(int msec) { pros::delay(msec); }
+#else
+const char* auton_function = "runAutonomous";
+void startRobot() { runPreAutonomous(); }
+void runAuton() { runAutonomous(); }
+void waitMsec(int msec) { vex::wait(msec, vex::msec); }
+#endif
 
 struct Options {
   std::string auton;
@@ -127,11 +158,25 @@ int main(int argc, char** argv) {
   belief.mcl_y = &mcl_y;
   rwsim::setup(robot, opt.world, belief);
 
-  // Pre-autonomous, like pre_auton() in src/main.cpp (calibrates the IMU, starts odometry and the selector)
-  runPreAutonomous();
+  // Pre-autonomous: runPreAutonomous() calibrates the IMU and starts odometry and the selector
+  startRobot();
+
+  // A holonomic drive or H-drive, if runPreAutonomous() set one up
+  std::string drive_type = "tank drive";
+  double strafe_ratio = (strafe_distance_in > 0 ? strafe_distance_in : wheel_distance_in) / wheel_distance_in;
+  if (holonomicMotor(0)) {
+    std::vector<int32_t> corners;
+    for (int i = 0; i < 4; i++) corners.push_back(holonomicMotor(i)->index());
+    rwsim::useHolonomicDrive(corners, strafe_ratio);
+    drive_type = "holonomic drive";
+  }
+  if (hDriveMotor()) {
+    rwsim::useStrafeWheel(hDriveMotor()->index(), strafe_ratio);
+    drive_type = "H-drive";
+  }
 
   if (opt.list || (auton_count == 0 && !opt.auton.empty())) {
-    if (auton_count == 0) std::printf("No autons were added with addAuton(), so runAutonomous() decides what runs.\n");
+    if (auton_count == 0) std::printf("No autons were added with addAuton(), so %s() decides what runs.\n", auton_function);
     for (int i = 0; i < auton_count; i++) std::printf("  %s\n", auton_names[i]);
     std::fflush(stdout);
     std::_Exit(opt.list ? 0 : 1);
@@ -152,7 +197,7 @@ int main(int argc, char** argv) {
     }
     name = auton_names[selected_auton];
   } else if (name.empty()) {
-    name = "runAutonomous";
+    name = auton_function;
   }
 
   std::string output = opt.output.empty() ? "sim/out/" + fileName(name) + ".html" : opt.output;
@@ -160,13 +205,13 @@ int main(int argc, char** argv) {
               opt.world.start_x, opt.world.start_y, opt.world.start_heading_deg,
               opt.world.realistic ? "realistic" : "ideal", opt.world.override_field ? "Override" : "empty",
               opt.world.time_limit_s);
-  std::printf("Robot: %s\n", from_profile ? ("fitted profile " + opt.profile).c_str() : "default drive (no robot profile)");
+  std::printf("Robot: %s, %s\n", drive_type.c_str(), from_profile ? ("fitted profile " + opt.profile).c_str() : "default drive (no robot profile)");
   std::fflush(stdout);
 
   rwsim::startRecording(name, opt.viewer, output);
   rwsim::setCompetition(true, true);
-  runAutonomous();
+  runAuton();
   // Keep watching a moment so the replay shows the robot settle
-  vex::wait(1000, vex::msec);
+  waitMsec(1000);
   rwsim::finishRun("auton finished");
 }

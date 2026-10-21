@@ -19,6 +19,10 @@ theme:
   name: material
   logo: assets/logo.svg
   favicon: assets/logo.svg
+  # Body text and code. Headings use Space Grotesk, loaded in stylesheets/extra.css
+  font:
+    text: Inter
+    code: JetBrains Mono
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default

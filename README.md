@@ -52,7 +52,14 @@ See the [features overview](https://richardbwang.github.io/RW-Template/) and [wh
 
 Updating? In VS Code's menu bar (top of the screen on a Mac), click **Terminal > Run Task... > Update RW-Template**. Your `custom` folder stays as it is. Projects from 4.0.0 and older [update by hand once](https://richardbwang.github.io/RW-Template/getting-started/installation/#projects-from-400-and-older).
 
-Using PROS? Run `pros c add-depot RW-Template https://raw.githubusercontent.com/richardbwang/RW-Template/depot/stable.json` and then `pros c apply RW-Template`. See [Using PROS](https://richardbwang.github.io/RW-Template/getting-started/pros/).
+Using PROS? Run these in your project's PROS terminal:
+
+```
+pros c add-depot RW-Template https://raw.githubusercontent.com/richardbwang/RW-Template/depot/stable.json
+pros c apply RW-Template
+```
+
+See [Using PROS](https://richardbwang.github.io/RW-Template/getting-started/pros/) for the rest.
 
 The full guide is on the **[documentation site](https://richardbwang.github.io/RW-Template/)**.
 

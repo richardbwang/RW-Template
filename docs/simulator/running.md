@@ -18,7 +18,12 @@ Run your autons on a computer and watch a replay, no robot needed. The simulator
 
     The simulator runs in WSL (Linux inside Windows). Some school laptops block WSL.
 
-    1. Open PowerShell as administrator, run `wsl --install`, and restart
+    1. Open PowerShell as administrator, run this, and restart:
+
+        ```
+        wsl --install
+        ```
+
     2. Finish the Ubuntu setup that opens
     3. In VS Code's terminal, type `wsl`. The terminal is now Linux, still in your project folder
     4. Run:
@@ -43,7 +48,11 @@ From the project folder (on Windows, type `wsl` in VS Code's terminal first):
 sh sim/run-sim.sh "Async Example"
 ```
 
-Use the name you gave `addAuton()`; `sh sim/run-sim.sh --list` lists them.
+Use the name you gave `addAuton()`. To list them:
+
+```bash
+sh sim/run-sim.sh --list
+```
 
 It builds your current code (everything in `src/` and `custom/`, minus `src/vexcode/main.cpp`), runs `runPreAutonomous()` and then your auton on a simulated robot, and writes a replay such as `sim/out/Async-Example.html`. In a PROS project it builds your `src/` files and runs `initialize()` and `autonomous()` instead (see [Using PROS](../getting-started/pros.md#simulator)).
 

@@ -1,10 +1,24 @@
 # Using PROS
 
-RW-Template also comes as a PROS template, so you can add it to a new or existing PROS project. The motions, settings, odometry and auton selector are the same as in the VEXcode version. Only the device setup uses PROS's types. It needs PROS kernel 4.2.1 or newer: `pros c info-project` shows your project's kernel version, and `pros c upgrade` updates it.
+RW-Template also comes as a PROS template, so you can add it to a new or existing PROS project. The motions, settings, odometry and auton selector are the same as in the VEXcode version. Only the device setup uses PROS's types. It needs PROS kernel 4.2.1 or newer.
 
 ## Install
 
-In VS Code with the PROS extension, open your project and its PROS terminal (the PROS icon on the left, then **Integrated Terminal**), and run:
+In VS Code with the PROS extension, open your project and its PROS terminal (the PROS icon on the left, then **Integrated Terminal**).
+
+New projects have kernel 4.2.1 or newer. For a project you already have, check its kernel version with:
+
+```
+pros c info-project
+```
+
+If it's older, update it first:
+
+```
+pros c upgrade
+```
+
+Then add RW-Template:
 
 ```
 pros c add-depot RW-Template https://raw.githubusercontent.com/richardbwang/RW-Template/depot/stable.json
@@ -73,7 +87,13 @@ The stand-ins cover RW and the common parts of PROS: motors and motor groups, th
 
 ## Update
 
-Run `pros c apply RW-Template` again. PROS replaces RW's own files (`sim/` too, apart from your replays and robot profile) and leaves `src/rw-config.cpp`, `src/rw-autons.cpp`, `src/rw-user.cpp` and `include/rw-config.h` alone. New settings have defaults, so your files keep building.
+Run this again in your project's PROS terminal:
+
+```
+pros c apply RW-Template
+```
+
+PROS replaces RW's own files (`sim/` too, apart from your replays and robot profile) and leaves `src/rw-config.cpp`, `src/rw-autons.cpp`, `src/rw-user.cpp` and `include/rw-config.h` alone. New settings have defaults, so your files keep building.
 
 ## Differences from VEXcode
 

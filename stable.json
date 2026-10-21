@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "metadata": {
+      "location": "https://github.com/richardbwang/RW-Template/releases/download/4.1.0/RW-Template-PROS.zip"
+    },
+    "name": "RW-Template",
+    "py/object": "pros.conductor.templates.base_template.BaseTemplate",
+    "supported_kernels": "^4.2.1",
+    "target": "v5",
+    "version": "4.1.0"
+  }
+]

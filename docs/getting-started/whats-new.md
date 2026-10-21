@@ -6,6 +6,7 @@
 ## 4.1.0
 
 - **[PROS version](pros.md):** RW-Template now also comes as a PROS template. Add it to a new or existing PROS project with two commands, and update it with one. The motions, settings, odometry, auton selector and simulator are the same as in VEXcode.
+- **This website:** a guide for every feature in one place, plus the [PID Playground](../guide/pid-playground.md), where you can try PID tuning in your browser, and a [replay gallery](../simulator/replays.md) of the example autons in the simulator.
 - **[One-click updates](installation.md#update-from-an-older-version):** in VS Code's menu bar, **Terminal > Run Task... > Update RW-Template** downloads the newest version and replaces RW's files. Your `custom` folder stays as it is.
 - **[X-drive, mecanum and H-drive](../guide/drive-types.md):** every motion works on them, and `strafe()`, `strafeToPose()` and the holonomic driver controls, including field-centric, can strafe.
 - **[Turn direction](../guide/autonomous.md#motion-settings):** `turnToAngle(180, clockwise, 1000)` always turns right, even when turning left is a hair shorter, so a 180° turn can't go the wrong way. `turnProfiled()` takes it too.

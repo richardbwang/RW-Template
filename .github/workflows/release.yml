@@ -1,10 +1,10 @@
 # Builds both downloads and tests them:
 # - RW-Template.zip for VEXcode (tools/build-release.sh), testing its updater (tools/update.sh and
 #   tools/update.ps1) on Linux, macOS and Windows
-# - RW-Template@<version>.zip, the PROS template (tools/build-pros-template.sh), testing it in a
-#   new PROS project
+# - RW-Template-PROS.zip, the PROS template (tools/build-pros-template.sh), testing it in new
+#   PROS projects
 # When you publish a release, it attaches both to it once the tests pass, then updates the PROS
-# depot (the depot branch's stable.json) so "pros c apply RW-Template" finds the new version.
+# depot (pros-depot.yml) so "pros c apply RW-Template" finds the new version.
 # To redo the downloads of an existing release, run this workflow from the Actions tab with its tag.
 name: Release downloads
 
@@ -153,23 +153,17 @@ jobs:
         with:
           name: RW-Template-PROS
 
-      - name: Upload RW-Template.zip and the PROS template
-        run: gh release upload "$TAG" RW-Template.zip RW-Template@*.zip --clobber --repo "$GITHUB_REPOSITORY"
+      # The PROS template builds as RW-Template@<version>.zip; on the release it's RW-Template-PROS.zip
+      - name: Upload RW-Template.zip and RW-Template-PROS.zip
+        run: |
+          mv RW-Template@*.zip RW-Template-PROS.zip
+          gh release upload "$TAG" RW-Template.zip RW-Template-PROS.zip --clobber --repo "$GITHUB_REPOSITORY"
         env:
           GH_TOKEN: ${{ github.token }}
 
+  # Lists the new PROS template in the depot, so "pros c apply RW-Template" finds it
   depot:
-    name: Update the PROS depot
     needs: publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
     permissions:
       contents: write
-    steps:
-      # Lists every release's PROS template in stable.json (beta.json for pre-releases) on the depot branch
-      - uses: LemLib/pros-depot@v0.1.0-beta.1
-        with:
-          token: ${{ github.token }}
-          repo: ${{ github.repository }}
-          source-repo: ${{ github.repository }}
-          readable-json: true
+    uses: ./.github/workflows/pros-depot.yml

@@ -1,6 +1,7 @@
 #!/bin/sh
-# Builds RW-Template@<version>.zip, the PROS template that "pros c apply RW-Template" installs,
-# from the PROS project in pros/. Needs the ARM toolchain (arm-none-eabi-g++) and the PROS CLI.
+# Builds RW-Template@<version>.zip, the PROS template that "pros c apply RW-Template" installs
+# (releases attach it as RW-Template-PROS.zip), from the PROS project in pros/. Needs the ARM
+# toolchain (arm-none-eabi-g++) and the PROS CLI.
 # .github/workflows/release.yml runs this for every release. To run it yourself:
 #   sh tools/build-pros-template.sh 4.1.0              writes pros/RW-Template@4.1.0.zip
 #   sh tools/build-pros-template.sh 4.1.0 out-folder   writes out-folder/RW-Template@4.1.0.zip

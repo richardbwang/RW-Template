@@ -15,8 +15,9 @@ export LC_ALL
 # tests, the images for the GitHub page, and any zips lying around (like an RW-Template.zip built here)
 repo_only() {
   case $1 in
-    pros/* | sim/pros/* | tools/build-pros-template.sh | tests/test-pros-template.sh | tests/test-drive-types.sh | \
-    docs/* | mkdocs.yml | .github/workflows/docs.yml | .github/workflows/release.yml | \
+    pros/* | sim/pros/* | tools/build-pros-template.sh | tools/build-pros-depot.sh | tests/test-pros-template.sh | \
+    tests/test-drive-types.sh | docs/* | mkdocs.yml | .github/workflows/docs.yml | .github/workflows/release.yml | \
+    .github/workflows/pros-depot.yml | \
     tools/build-release.sh | tests/test-update.sh | assets/logo.png | assets/social-preview.* | *.zip) return 0 ;;
   esac
   return 1

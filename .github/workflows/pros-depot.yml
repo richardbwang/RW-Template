@@ -1,0 +1,50 @@
+# Rebuilds the PROS depot: the depot branch's stable.json and beta.json, which
+# "pros c add-depot RW-Template .../depot/stable.json" reads. It lists every release's
+# RW-Template-PROS.zip (tools/build-pros-depot.sh). Release downloads runs this once a new
+# release's downloads are attached, and it runs again when a release is edited (like turning a
+# pre-release into a full release) or deleted. To run it yourself: Actions tab > PROS depot.
+name: PROS depot
+
+on:
+  workflow_call:
+  release:
+    types: [edited, deleted]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  depot:
+    name: Update the PROS depot
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency: pros-depot
+    steps:
+      # The newest script, whichever release this is for
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Build stable.json and beta.json from the releases
+        run: sh tools/build-pros-depot.sh "$RUNNER_TEMP/depot"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Commit them to the depot branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git fetch --depth 1 origin depot; then
+            git switch --force-create depot FETCH_HEAD
+          else
+            git switch --orphan depot
+          fi
+          cp "$RUNNER_TEMP/depot/stable.json" "$RUNNER_TEMP/depot/beta.json" .
+          git add stable.json beta.json
+          if git diff --cached --quiet; then
+            echo "The depot is already up to date"
+          else
+            git commit -q -m "Update the PROS depot"
+            git push origin depot
+          fi

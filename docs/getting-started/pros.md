@@ -69,7 +69,7 @@ sh sim/run-sim.sh "Tuning Test"
 
 It builds your `src/` files with RW's code from `sim/rw/` (`firmware/RW-Template.a` only runs on the robot) and stand-ins for PROS's devices in `sim/pros/`. Then it runs `initialize()` and `autonomous()` from your `src/main.cpp`, the way PROS does, and writes a replay to `sim/out/`.
 
-The stand-ins cover RW and the common parts of PROS: motors and motor groups, the IMU, rotation and distance sensors, three-wire ports, tasks, timing and the controller. Code that uses another library, like LemLib or OkapiLib, won't build in the simulator.
+The stand-ins cover RW and the common parts of PROS: motors and motor groups, the IMU, rotation and distance sensors, three-wire ports, tasks, timing and the controller. The Brain screen and LLEMU (`pros::lcd`) work too, but show nothing. Code that uses another library, like LemLib or OkapiLib, won't build in the simulator.
 
 ## Update
 

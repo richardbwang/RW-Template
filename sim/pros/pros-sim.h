@@ -569,18 +569,28 @@ void print(text_format_e_t txt_fmt, int16_t x, int16_t y, const char* text, Para
 inline screen_touch_status_s_t touch_status() { return screen_touch_status_s_t{E_TOUCH_RELEASED, 0, 0, 0, 0}; }
 }  // namespace screen
 
+#ifndef LCD_BTN_LEFT
+#define LCD_BTN_LEFT 4
+#define LCD_BTN_CENTER 2
+#define LCD_BTN_RIGHT 1
+#endif
+
 namespace lcd {
+using lcd_btn_cb_fn_t = void (*)(void);
+enum class Text_Align { LEFT = 0, CENTER, RIGHT };
 inline bool initialize() { return true; }
 inline bool is_initialized() { return true; }
+inline bool shutdown() { return true; }
 template <class... Params>
 bool print(int16_t line, const char* fmt, Params... args) { (void)line; (void)fmt; ((void)args, ...); return true; }
 inline bool set_text(int16_t line, const std::string& text) { (void)line; (void)text; return true; }
 inline bool clear() { return true; }
 inline bool clear_line(int16_t line) { (void)line; return true; }
+inline void set_text_align(Text_Align alignment) { (void)alignment; }
 inline uint8_t read_buttons() { return 0; }
-inline void register_btn0_cb(void (*cb)()) { (void)cb; }
-inline void register_btn1_cb(void (*cb)()) { (void)cb; }
-inline void register_btn2_cb(void (*cb)()) { (void)cb; }
+inline void register_btn0_cb(lcd_btn_cb_fn_t cb) { (void)cb; }
+inline void register_btn1_cb(lcd_btn_cb_fn_t cb) { (void)cb; }
+inline void register_btn2_cb(lcd_btn_cb_fn_t cb) { (void)cb; }
 }  // namespace lcd
 
 }  // namespace pros

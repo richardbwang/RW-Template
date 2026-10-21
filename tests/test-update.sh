@@ -66,8 +66,12 @@ team_project() {
   mkdir -p "$1/notes" "$1/.vscode"
   echo 'team notes' > "$1/notes/plan.txt"
   echo '{ "team": true }' > "$1/.vscode/settings.json"
-  # Windows line endings, like a git checkout on Windows makes. Same file, so it's left as it is
+  # Windows line endings, like a git checkout on Windows makes. Same file, so it's left as it is.
+  # The copy next to the project is what it has to match afterwards: cmp compares bytes, while some
+  # Windows tools (like grep) drop CRs when they read a file
   awk '{ printf "%s\r\n", $0 }' "$1/include/path.h" > "$work/crlf" && mv "$work/crlf" "$1/include/path.h"
+  ! cmp -s "$1/include/path.h" "$work/new/include/path.h" || fail "couldn't give include/path.h Windows line endings"
+  cp "$1/include/path.h" "$1.path.h"
   mkdir "$1/build"
   echo 'old build' > "$1/build/main.o"
 }
@@ -135,7 +139,7 @@ grep -q 'team file' "$team/src/intake.cpp" || fail "src/intake.cpp (a team file)
 grep -q 'team notes' "$team/notes/plan.txt" || fail "notes/plan.txt (a team file) changed"
 [ ! -e "$team/src/old-feature.cpp" ] || fail "src/old-feature.cpp (removed in the new version) is still there"
 [ ! -e "$team/build" ] || fail "build/ is still there"
-grep -q "$(printf '\r')" "$team/include/path.h" || fail "include/path.h lost its Windows line endings"
+cmp -s "$team/include/path.h" "$team.path.h" || fail "include/path.h changed, though only its line endings were different"
 backup=$(ls -d "$team"/rw-backup/9.8.0-* 2>/dev/null | head -n 1)
 if [ -z "$backup" ]; then
   fail "no backup in rw-backup/9.8.0-*"

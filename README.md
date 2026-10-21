@@ -50,7 +50,7 @@ See the [features overview](https://richardbwang.github.io/RW-Template/) and [wh
 4. Run the **Tuning Test** auton and tune the PID constants until it stops on target
 5. Write your autons in `custom/src/autonomous.cpp`. [Which motion should I use?](https://richardbwang.github.io/RW-Template/guide/autonomous/#which-motion-should-i-use)
 
-Updating? In VS Code, run **Terminal > Run Task... > Update RW-Template**. Your `custom` folder stays as it is. Projects from 4.0.0 and older [update by hand once](https://richardbwang.github.io/RW-Template/getting-started/installation/#projects-from-400-and-older).
+Updating? In VS Code's menu bar (top of the screen on a Mac), click **Terminal > Run Task... > Update RW-Template**. Your `custom` folder stays as it is. Projects from 4.0.0 and older [update by hand once](https://richardbwang.github.io/RW-Template/getting-started/installation/#projects-from-400-and-older).
 
 Using PROS? Run `pros c add-depot RW-Template https://raw.githubusercontent.com/richardbwang/RW-Template/depot/stable.json` and then `pros c apply RW-Template`. See [Using PROS](https://richardbwang.github.io/RW-Template/getting-started/pros/).
 

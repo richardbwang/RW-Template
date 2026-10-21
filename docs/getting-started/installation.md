@@ -17,7 +17,16 @@ Then follow the [Quick Start](quick-start.md).
 
 ## Update from an older version
 
-In VS Code, open your project and choose **Terminal > Run Task... > Update RW-Template**. When it's done, build and download as usual.
+Open your project in VS Code, then:
+
+1. In the menu bar, click **Terminal**. On a Mac the menu bar is at the very top of the screen; on Windows and Linux it's at the top of the VS Code window (if you only see a ☰ icon there, click it first)
+2. Click **Run Task...**
+3. Pick **Update RW-Template** from the list
+
+When it's done, build and download as usual.
+
+!!! tip "Can't find the menu?"
+    Press ++cmd+shift+p++ (++ctrl+shift+p++ on Windows), type `Run Task`, press ++enter++, and pick **Update RW-Template**.
 
 Projects from 4.0.0 and older don't have this task yet. [Update them by hand once](#projects-from-400-and-older), then use the task after that.
 

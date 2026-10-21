@@ -57,7 +57,7 @@ These aren't part of the robot build.
 
 - **tests/**: computer-side tests for the odometry and distance reset math, plus an MCL field simulation. See [Testing on a Computer](../simulator/testing.md)
 - **sim/**: the [simulator](../simulator/running.md). `run-sim.sh` runs it, `viewer.html` is the replay page, `drive-model.h` is the drive physics, `fit-profile.sh` calibrates it from your robot, `find-compiler.sh` finds a C++ compiler for the scripts, `vex/` holds the stand-in VEX API, and `sim-hooks.h` is how the stand-in talks to the simulated robot
-- **tools/**: the [updater](../getting-started/installation.md#update-from-an-older-version). `update.ps1` (Windows) and `update.sh` (Mac and Linux) update the project to a new version, and `rw-files.txt` lists RW's files so they know what to replace. **Terminal > Run Task... > Update RW-Template** runs them
+- **tools/**: the [updater](../getting-started/installation.md#update-from-an-older-version). `update.ps1` (Windows) and `update.sh` (Mac and Linux) update the project to a new version, and `rw-files.txt` lists RW's files so they know what to replace. In VS Code's menu bar, **Terminal > Run Task... > Update RW-Template** runs them
 
 ## The PROS version
 

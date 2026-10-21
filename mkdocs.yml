@@ -15,10 +15,6 @@ exclude_docs: |
   build-replays.sh
   requirements.txt
 
-# The previous home page, kept at /home-classic/ to compare with the new one. Delete once picked.
-not_in_nav: |
-  home-classic.md
-
 theme:
   name: material
   logo: assets/logo.svg

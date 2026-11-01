@@ -29,6 +29,8 @@ float deadband(float input, float width){
   return(input);
 }
 
+volatile int requestedStage = 1;
+
 void controlNormalized() {
 
     double forward = deadband(controller_1.Axis3.value(), 10);
@@ -51,17 +53,52 @@ void controlNormalized() {
 
 }
 
+
 void liftControl(){
-  while(1){
-    if(controller_1.ButtonR1.pressing()){
-      lift.spin(fwd,12,volt);
-    }else if(controller_1.ButtonR2.pressing()){
-      lift.spin(reverse,12,volt);
-    }else{
-      lift.stop(hold);
+  while (true) {
+    if (controller_1.ButtonR1.pressing()) {
+      lift.spin(fwd, 12, volt);
+    } else if (controller_1.ButtonR2.pressing()) {
+      lift.spin(reverse, 12, volt);
+    } else {
+      double targetRotation = 0;
+      if (requestedStage == 2) {
+        targetRotation = -16.2;
+      } else if (requestedStage == 3) {
+        targetRotation = -39.1;
+      }
+
+      double error = targetRotation - liftHeight.position(deg);
+      if (std::fabs(error) <= 1.0) {
+        lift.stop(hold);
+      } else {
+        double voltage = std::fmin(std::fabs(error) * 0.5, 12.0);
+        // The sensor's measured angle decreases as the lift rises.
+        if (error < 0) {
+          lift.spin(fwd, voltage, volt);
+        } else {
+          lift.spin(reverse, voltage, volt);
+        }
+      }
     }
+
+    wait(20, msec);
   }
 }
+
+
+
+// void liftControl(){
+//   while(1){
+//     if(controller_1.ButtonR1.pressing()){
+//       lift.spin(fwd,12,volt);
+//     }else if(controller_1.ButtonR2.pressing()){
+//       lift.spin(reverse,12,volt);
+//     }else{
+//       lift.stop(hold);
+//     }
+//   }
+// }
 
 bool clawOverride = false;
 
@@ -134,14 +171,22 @@ void clawControlPranoy(){
   
 }
 
+//stage 1 = 0
+//stage 2 = -16.2
+//stage 3 = -39.1
 
-constexpr double rotationDegreesPerStage = -20.0;
 //
 void rotationMeasure() {
   while (true) {
-    double rotationDegrees = liftHeight.position(deg);
-    int stage = static_cast<int>(
-        std::floor(rotationDegrees / rotationDegreesPerStage));
+    double rotationDegrees = -(liftHeight.position(deg));
+   int stage;
+if (rotationDegrees >= 39.1) {
+  stage = 3;
+} else if (rotationDegrees >= 16.2) {
+  stage = 2;
+} else if (rotationDegrees >= 0) {
+  stage = 1;
+}
 
     Brain.Screen.clearScreen();
     Brain.Screen.setCursor(1, 1);
@@ -149,6 +194,32 @@ void rotationMeasure() {
     Brain.Screen.setCursor(2, 1);
     Brain.Screen.print("Rotation: %.1f deg", rotationDegrees);
     wait(100, msec);
+  }
+}
+
+
+void stageSetter(){
+  bool upWasPressed = false;
+  bool rightWasPressed = false;
+  bool downWasPressed = false;
+
+  while (true) {
+    bool upPressed = controller_1.ButtonUp.pressing();
+    bool rightPressed = controller_1.ButtonRight.pressing();
+    bool downPressed = controller_1.ButtonDown.pressing();
+
+    if (upPressed && !upWasPressed) {
+      requestedStage = 1;
+    } else if (rightPressed && !rightWasPressed) {
+      requestedStage = 2;
+    } else if (downPressed && !downWasPressed) {
+      requestedStage = 3;
+    }
+
+    upWasPressed = upPressed;
+    rightWasPressed = rightPressed;
+    downWasPressed = downPressed;
+    wait(20, msec);
   }
 }
 
@@ -224,6 +295,7 @@ void runDriver() {
   thread claw_control_thread(clawControl);
   thread controller_display(conD);
   thread rotation_display(rotationMeasure);
+  thread stage_setter_thread(stageSetter);
 
   
 

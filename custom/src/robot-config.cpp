@@ -44,8 +44,8 @@ distance right_sensor = distance(PORT21);
 distance back_sensor = distance(PORT21);
 
 
-motor rightLift = motor(PORT8,ratio18_1,true);
-motor leftLift = motor(PORT3,ratio18_1,false);
+motor rightLift = motor(PORT4,ratio18_1,true);
+motor leftLift = motor(PORT4,ratio18_1,true); //for test purposes, change back to false later-3
 motor_group lift = motor_group(rightLift,leftLift);
 
 motor claw = motor(PORT12,ratio18_1,true);

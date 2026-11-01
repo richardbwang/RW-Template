@@ -62,7 +62,11 @@ void liftControl(){
       lift.spin(reverse, 12, volt);
     } else {
       double targetRotation = 0;
-      if (requestedStage == 2) {
+      if (requestedStage == 0) {
+        targetRotation = 0; // placeholder, same as stage 1 for now
+      } else if (requestedStage == 1) {
+        targetRotation = 0;
+      } else if (requestedStage == 2) {
         targetRotation = -16.2;
       } else if (requestedStage == 3) {
         targetRotation = -39.1;
@@ -151,6 +155,7 @@ void clawControl(){
         claw.stop(hold);
       }
     }
+    wait(20, msec);
   }
 }
 
@@ -167,10 +172,11 @@ void clawControlPranoy(){
       claw.stop(coast);
       clawOverride = false;
     }
+    wait(20, msec);
   }
-  
 }
 
+//stage 0 = 0 (placeholder, same as stage 1)
 //stage 1 = 0
 //stage 2 = -16.2
 //stage 3 = -39.1
@@ -179,7 +185,7 @@ void clawControlPranoy(){
 void rotationMeasure() {
   while (true) {
     double rotationDegrees = -(liftHeight.position(deg));
-   int stage;
+   int stage = 1;
 if (rotationDegrees >= 39.1) {
   stage = 3;
 } else if (rotationDegrees >= 16.2) {
@@ -198,26 +204,25 @@ if (rotationDegrees >= 39.1) {
 }
 
 
+// Up arrow raises the stage by one, down arrow lowers it by one.
+const int MIN_STAGE = 0;
+const int MAX_STAGE = 3;
+
 void stageSetter(){
   bool upWasPressed = false;
-  bool rightWasPressed = false;
   bool downWasPressed = false;
 
   while (true) {
     bool upPressed = controller_1.ButtonUp.pressing();
-    bool rightPressed = controller_1.ButtonRight.pressing();
     bool downPressed = controller_1.ButtonDown.pressing();
 
-    if (upPressed && !upWasPressed) {
-      requestedStage = 1;
-    } else if (rightPressed && !rightWasPressed) {
-      requestedStage = 2;
-    } else if (downPressed && !downWasPressed) {
-      requestedStage = 3;
+    if (upPressed && !upWasPressed && requestedStage < MAX_STAGE) {
+      requestedStage++;
+    } else if (downPressed && !downWasPressed && requestedStage > MIN_STAGE) {
+      requestedStage--;
     }
 
     upWasPressed = upPressed;
-    rightWasPressed = rightPressed;
     downWasPressed = downPressed;
     wait(20, msec);
   }
@@ -228,6 +233,10 @@ void conD(){
     controller_1.Screen.clearLine(1);
     controller_1.Screen.setCursor(1,1);
     controller_1.Screen.print("%f",claw.position(deg));
+    controller_1.Screen.clearLine(2);
+    controller_1.Screen.setCursor(2,1);
+    controller_1.Screen.print("Stage: %d", (int)requestedStage);
+    wait(100, msec);
   }
 }
 

@@ -15,7 +15,6 @@
 
 
 
-
 // Modify autonomous, driver, or pre-auton code below
 
 // =============================================================================
@@ -30,6 +29,8 @@ float deadband(float input, float width){
 }
 
 volatile int requestedStage = 1;
+bool manualMode = false;
+
 
 void controlNormalized() {
 
@@ -54,41 +55,61 @@ void controlNormalized() {
 }
 
 
-void liftControl(){
-  while (true) {
-    if (controller_1.ButtonR1.pressing()) {
-      lift.spin(fwd, 12, volt);
-    } else if (controller_1.ButtonR2.pressing()) {
-      lift.spin(reverse, 12, volt);
-    } else {
-      double targetRotation = 0;
-      if (requestedStage == 0) {
-        targetRotation = 0; // placeholder, same as stage 1 for now
-      } else if (requestedStage == 1) {
-        targetRotation = 0;
-      } else if (requestedStage == 2) {
-        targetRotation = -16.2;
-      } else if (requestedStage == 3) {
-        targetRotation = -39.1;
-      }
+void liftControl() {
+bool wasManual = false;
 
-      double error = targetRotation - liftHeight.position(deg);
-      if (std::fabs(error) <= 1.0) {
-        lift.stop(hold);
-      } else {
-        double voltage = std::fmin(std::fabs(error) * 0.5, 12.0);
-        // The sensor's measured angle decreases as the lift rises.
-        if (error < 0) {
-          lift.spin(fwd, voltage, volt);
-        } else {
-          lift.spin(reverse, voltage, volt);
-        }
+  while (true) {
+    bool r1Pressed = controller_1.ButtonR1.pressing();
+    bool r2Pressed = controller_1.ButtonR2.pressing();
+
+if (r1Pressed) {
+  lift.spin(fwd, 12, volt);
+  wasManual = true;
+} else if (r2Pressed) {
+    lift.spin(reverse, 12, volt);
+    wasManual = true;
+} else {
+// When manual input stops, sync requestedStage to current physical position
+    if (wasManual) {
+      double currentDegrees = -liftHeight.position(deg);
+
+  if (currentDegrees >= 39.1) {
+    requestedStage = 3;
+} else if (currentDegrees >= 16.2) {
+    requestedStage = 2;
+} else {
+    requestedStage = 1;
+}
+wasManual = false;
+}
+
+// Target stage positioning logic
+double targetRotation = 0;
+  if (requestedStage == 0 || requestedStage == 1) {
+    targetRotation = 0;
+} else if (requestedStage == 2) {
+    targetRotation = -16.2;
+} else if (requestedStage == 3) {
+    targetRotation = -39.1;
+}
+
+double error = targetRotation - (-liftHeight.position(deg));
+
+if (std::fabs(error) <= 1.0) {
+  lift.stop(hold);
+} else {
+    double voltage = std::fmin(std::fabs(error) * 0.5, 12.0);
+if (error < 0) {
+  lift.spin(fwd, voltage, volt);
+} else {
+    lift.spin(reverse, voltage, volt);
       }
     }
-
-    wait(20, msec);
   }
+  wait(20, msec);
 }
+}
+
 
 
 
@@ -208,41 +229,41 @@ if (rotationDegrees >= 39.1) {
 const int MIN_STAGE = 0;
 const int MAX_STAGE = 3;
 
-void stageSetter(){
+void stageSetter() {
   bool upWasPressed = false;
   bool downWasPressed = false;
   bool rightWasPressed = false;
-  bool manualMode = false;
-  bool manualBtnPressed = false;
   bool manualBtnWasPressed = false;
 
   while (true) {
     bool upPressed = controller_1.ButtonUp.pressing();
     bool downPressed = controller_1.ButtonDown.pressing();
     bool rightPressed = controller_1.ButtonRight.pressing();
+    bool manualBtnPressed = controller_1.ButtonLeft.pressing();
 
-    if(manualBtnPressed && !manualBtnWasPressed ){
-      manualMode = !manualMode;
-    }
-    manualBtnWasPressed = manualBtnPressed;
-    if(!manualMode){
-    if (upPressed && !upWasPressed && requestedStage < MAX_STAGE) {
-      requestedStage++;
-    } else if (downPressed && !downWasPressed && requestedStage > MIN_STAGE) {
-      requestedStage--;
-    } else if (rightPressed && !rightWasPressed){
-      requestedStage = 0;
-    }
-    else{
-      requestedStage = -1;
-    }
-  }
-    upWasPressed = upPressed;
-    downWasPressed = downPressed;
-    rightWasPressed = rightPressed;
-    wait(20, msec);
-  }
+// Toggle manual mode
+if (manualBtnPressed && !manualBtnWasPressed) {
+  manualMode = !manualMode;
 }
+  manualBtnWasPressed = manualBtnPressed;
+
+// Stage controls (updates requestedStage without fighting motors)
+if (upPressed && !upWasPressed && requestedStage < MAX_STAGE) {
+  requestedStage++;
+} else if (downPressed && !downWasPressed && requestedStage > MIN_STAGE) {
+  requestedStage--;
+} else if (rightPressed && !rightWasPressed) {
+  requestedStage = 0;
+}
+
+upWasPressed = upPressed;
+downWasPressed = downPressed;
+rightWasPressed = rightPressed;
+wait(20, msec);
+}
+}
+
+
 
 void conD(){
   while(1){

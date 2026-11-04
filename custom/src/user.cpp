@@ -211,19 +211,35 @@ const int MAX_STAGE = 3;
 void stageSetter(){
   bool upWasPressed = false;
   bool downWasPressed = false;
+  bool rightWasPressed = false;
+  bool manualMode = false;
+  bool manualBtnPressed = false;
+  bool manualBtnWasPressed = false;
 
   while (true) {
     bool upPressed = controller_1.ButtonUp.pressing();
     bool downPressed = controller_1.ButtonDown.pressing();
+    bool rightPressed = controller_1.ButtonRight.pressing();
 
+    if(manualBtnPressed && !manualBtnWasPressed ){
+      manualMode = !manualMode;
+    }
+    manualBtnWasPressed = manualBtnPressed;
+    if(!manualMode){
     if (upPressed && !upWasPressed && requestedStage < MAX_STAGE) {
       requestedStage++;
     } else if (downPressed && !downWasPressed && requestedStage > MIN_STAGE) {
       requestedStage--;
+    } else if (rightPressed && !rightWasPressed){
+      requestedStage = 0;
     }
-
+    else{
+      requestedStage = -1;
+    }
+  }
     upWasPressed = upPressed;
     downWasPressed = downPressed;
+    rightWasPressed = rightPressed;
     wait(20, msec);
   }
 }

@@ -24,28 +24,30 @@ motor right_chassis1 = motor(PORT16, ratio6_1, false); //back
 motor right_chassis2 = motor(PORT6, ratio6_1, true); //front
 motor_group right_chassis = motor_group(right_chassis1, right_chassis2);
 
-inertial inertial_sensor = inertial(PORT6);
+motor toggle = motor(PORT11,ratio18_1,false);
+
+inertial inertial_sensor = inertial(PORT21);
 optical example_optical_sensor = optical(PORT8);
-distance example_distance_sensor = distance(PORT21);
+distance example_distance_sensor = distance(PORT19);
 digital_out example_piston = digital_out(Brain.ThreeWirePort.A);
 
 // Format is rotation(port, reversed)
 // just set these to random ports if you don't use tracking wheels
-rotation horizontal_tracker = rotation(PORT3, true);
-rotation vertical_tracker = rotation(PORT14, true);
+rotation horizontal_tracker = rotation(PORT7, true);
+rotation vertical_tracker = rotation(PORT20, true);
 rotation liftHeight = rotation(PORT5);
 
 
 // Distance reset sensors
 // Set these to random ports if you are not using distance resets
 distance front_sensor = distance(PORT21);
-distance left_sensor = distance(PORT21);
-distance right_sensor = distance(PORT21);
-distance back_sensor = distance(PORT21);
+distance left_sensor = distance(PORT19);
+distance right_sensor = distance(PORT19);
+distance back_sensor = distance(PORT19);
 
 
-motor rightLift = motor(PORT4,ratio18_1,true);
-motor leftLift = motor(PORT4,ratio18_1,true); //for test purposes, change back to false later-3
+motor rightLift = motor(PORT3,ratio36_1,false);
+motor leftLift = motor(PORT8,ratio36_1,true); //for test purposes, change back to false later-3
 motor_group lift = motor_group(rightLift,leftLift);
 
 motor claw = motor(PORT12,ratio18_1,true);
@@ -84,8 +86,8 @@ bool using_vertical_tracker = true;   // Set to true if a vertical tracking whee
 double horizontal_tracker_dist_from_center = 0;
 // Horizontal distance from the center of the bot to the vertical tracking wheel (in inches, positive is when the wheel is to the right of the center)
 double vertical_tracker_dist_from_center = .53;
-double horizontal_tracker_diameter = 2.75; // Diameter of the horizontal tracker wheel (in inches)
-double vertical_tracker_diameter = 2; // Diameter of the vertical tracker wheel (in inches)
+double horizontal_tracker_diameter = 2.0; // Diameter of the horizontal tracker wheel (in inches)
+double vertical_tracker_diameter = 2.0; // Diameter of the vertical tracker wheel (in inches)
 
 // Distance Reset setup
 // If you are not using all four distance sensors, just set the unused ones to 0

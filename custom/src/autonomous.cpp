@@ -316,7 +316,10 @@ void autonOne(){
   //finished
 }
 void tunePid(){
+  x_pos = 0;
+  y_pos = 0;
   driveTo(12, 5000);
+  driveTo(24, 5000);
   std::cout << "x_pos=" << x_pos << " y_pos=" << y_pos << " error_y=" << (12 - y_pos) << "\n";
   
 }

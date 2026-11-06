@@ -197,6 +197,22 @@ void clawControlPranoy(){
   }
 }
 
+void toggleControl(){
+  bool toggled=false;
+  while(1){
+    if(controller_1.ButtonA.pressing()&&!toggled){
+      toggle.spin(fwd,12,volt);
+      toggled=true;
+    }
+    else{
+      toggle.stop();
+      toggled=false;
+    }
+    
+    wait(20, msec);
+  } 
+}
+
 //stage 0 = 0 (placeholder, same as stage 1)
 //stage 1 = 0
 //stage 2 = -16.2
@@ -269,10 +285,13 @@ void conD(){
   while(1){
     controller_1.Screen.clearLine(1);
     controller_1.Screen.setCursor(1,1);
-    controller_1.Screen.print("%f",claw.position(deg));
+    controller_1.Screen.print("%f",horizontal_tracker.position(deg));
     controller_1.Screen.clearLine(2);
     controller_1.Screen.setCursor(2,1);
-    controller_1.Screen.print("Stage: %d", (int)requestedStage);
+        controller_1.Screen.print("%f",vertical_tracker.position(deg));
+        controller_1.Screen.clearLine(3);
+    controller_1.Screen.setCursor(3,1);
+        controller_1.Screen.print("%f",getInertialHeading());
     wait(100, msec);
   }
 }
@@ -287,7 +306,7 @@ void runAutonomous() {
   thread a(brainD);
   switch(auton_selected) {
     case 1:
-     
+      tunePid();
       break;
     case 2:
      
@@ -327,7 +346,8 @@ bool lift_home_prev = false;
 
 void runDriver() {
 
-
+  horizontal_tracker.setPosition(0,deg);
+  vertical_tracker.setPosition(0,deg);
   stopChassis(coast);
   heading_correction = false;
   claw.setPosition(0,deg);
@@ -342,7 +362,7 @@ void runDriver() {
   thread controller_display(conD);
   thread rotation_display(rotationMeasure);
   thread stage_setter_thread(stageSetter);
-
+  thread toggle_thread(toggleControl);
   
 
     resetChassis();

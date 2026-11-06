@@ -26,6 +26,8 @@ extern distance left_sensor;
 extern distance right_sensor;
 extern distance back_sensor;
 
+extern motor toggle;
+
 extern motor rightLift;
 extern motor leftLift;
 extern motor_group lift;

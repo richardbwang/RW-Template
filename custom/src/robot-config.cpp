@@ -81,7 +81,7 @@ bool using_vertical_tracker = true;   // Set to true if a vertical tracking whee
 // IGNORE THESE IF YOU ARE NOT USING TRACKING WHEELS
 // These comments are in the perspective of a top down view of the robot when the robot is facing vertical
 // Vertical distance from the center of the bot to the horizontal tracking wheel (in inches, positive is when the wheel is behind the center)
-double horizontal_tracker_dist_from_center = 4.91;
+double horizontal_tracker_dist_from_center = 0;
 // Horizontal distance from the center of the bot to the vertical tracking wheel (in inches, positive is when the wheel is to the right of the center)
 double vertical_tracker_dist_from_center = .53;
 double horizontal_tracker_diameter = 2.75; // Diameter of the horizontal tracker wheel (in inches)

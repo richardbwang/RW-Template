@@ -318,9 +318,11 @@ void autonOne(){
 void tunePid(){
   x_pos = 0;
   y_pos = 0;
-  driveTo(12, 5000);
-  driveTo(24, 5000);
-  std::cout << "x_pos=" << x_pos << " y_pos=" << y_pos << " error_y=" << (12 - y_pos) << "\n";
+  boomerang(24,24,1,90,0.3,5000);
+  wait(3,sec);
+  boomerang(0,0,-1,0,0.3,5000);
+ 
+  
   
 }
 
@@ -808,3 +810,19 @@ void brainD(){
 
 //   stopChassis(coast);
 // }
+
+// =============================================================================
+// WPI
+// =============================================================================
+
+void BA_2pin(){
+  x_pos = 0;
+  y_pos = 0;
+  claw.spin(fwd,12,volt);
+  moveToPoint(9.5,10,1,2500,false);
+  moveToPoint(17.5,10.5,1,2500);
+  wait(1,sec);
+  driveTo(-6,1000);
+  turnToPoint(24,0,1,1000);
+  stopChassis(coast);
+}

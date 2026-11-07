@@ -47,3 +47,5 @@ void printText(const char* text);
 void release();
 
 double clamp(double value, double min, double max);
+
+void BA_2pin();

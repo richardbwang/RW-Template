@@ -285,10 +285,10 @@ void conD(){
   while(1){
     controller_1.Screen.clearLine(1);
     controller_1.Screen.setCursor(1,1);
-    controller_1.Screen.print("%f",horizontal_tracker.position(deg));
+    controller_1.Screen.print("%f",x_pos);
     controller_1.Screen.clearLine(2);
     controller_1.Screen.setCursor(2,1);
-        controller_1.Screen.print("%f",vertical_tracker.position(deg));
+        controller_1.Screen.print("%f",y_pos);
         controller_1.Screen.clearLine(3);
     controller_1.Screen.setCursor(3,1);
         controller_1.Screen.print("%f",getInertialHeading());
@@ -304,9 +304,10 @@ void conD(){
 void runAutonomous() {
   int auton_selected = 1;
   thread a(brainD);
+  thread b(conD);
   switch(auton_selected) {
     case 1:
-      tunePid();
+      BA_2pin();
       break;
     case 2:
      

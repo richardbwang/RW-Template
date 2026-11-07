@@ -72,9 +72,9 @@ double wheel_distance_in = (36.0 / 48.0) * 2.75 * M_PI;
 // heading_correction_* : PID for heading correction during linear movement
 //og double distance_kp = 1.1, distance_ki = 0.1, distance_kd = 7;
 
-double distance_kp = 1.4, distance_ki = .5, distance_kd =10;
-double turn_kp = 0.2, turn_ki = 0, turn_kd = .75;
-double heading_correction_kp = .72, heading_correction_ki = .2, heading_correction_kd = 2;
+double distance_kp = 2.3, distance_ki = 0, distance_kd =5;
+double turn_kp = .35, turn_ki = 0, turn_kd = 1.5;
+double heading_correction_kp = 1.3, heading_correction_ki = 0, heading_correction_kd = 2;
 
 // Enable or disable the use of tracking wheels
 bool using_horizontal_tracker = true;  // Set to true if a horizontal tracking wheel is installed and used for odometry
@@ -83,9 +83,9 @@ bool using_vertical_tracker = true;   // Set to true if a vertical tracking whee
 // IGNORE THESE IF YOU ARE NOT USING TRACKING WHEELS
 // These comments are in the perspective of a top down view of the robot when the robot is facing vertical
 // Vertical distance from the center of the bot to the horizontal tracking wheel (in inches, positive is when the wheel is behind the center)
-double horizontal_tracker_dist_from_center = 0;
+double horizontal_tracker_dist_from_center = 4.02;
 // Horizontal distance from the center of the bot to the vertical tracking wheel (in inches, positive is when the wheel is to the right of the center)
-double vertical_tracker_dist_from_center = .53;
+double vertical_tracker_dist_from_center = -0.47;
 double horizontal_tracker_diameter = 2.0; // Diameter of the horizontal tracker wheel (in inches)
 double vertical_tracker_diameter = 2.0; // Diameter of the vertical tracker wheel (in inches)
 

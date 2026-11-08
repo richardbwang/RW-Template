@@ -73,7 +73,7 @@ double wheel_distance_in = (36.0 / 48.0) * 2.75 * M_PI;
 //og double distance_kp = 1.1, distance_ki = 0.1, distance_kd = 7;
 
 double distance_kp = 2.3, distance_ki = 0, distance_kd =5;
-double turn_kp = .35, turn_ki = 0, turn_kd = 1.5;
+double turn_kp = .3, turn_ki = 0, turn_kd = 1.5;
 double heading_correction_kp = 1.3, heading_correction_ki = 0, heading_correction_kd = 2;
 
 // Enable or disable the use of tracking wheels

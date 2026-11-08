@@ -47,5 +47,8 @@ void printText(const char* text);
 void release();
 
 double clamp(double value, double min, double max);
-
+//blue
 void BA_2pin();
+void BA_3pin();
+void BAL_3pin();
+//red

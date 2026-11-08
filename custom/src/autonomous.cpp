@@ -368,7 +368,7 @@ void brainD(){
 // // Single Pin
 // // ============================================================================
 
-// void NA_1pin(){
+
 
 
 //    claw.spin(fwd,12,volt);
@@ -814,15 +814,138 @@ void brainD(){
 // =============================================================================
 // WPI
 // =============================================================================
+//Blue Auto
+
 
 void BA_2pin(){
   x_pos = 0;
   y_pos = 0;
+  
+  //toggles.spin(fwd,12,volt);
+
   claw.spin(fwd,12,volt);
-  moveToPoint(9.5,10,1,2500,false);
-  moveToPoint(17.5,10.5,1,2500);
+
+  moveToPoint(17.5,10.5,1,2500,true,10);
+
+  claw.spin(reverse,12,volt);
+
   wait(1,sec);
+
+
+  
   driveTo(-6,1000);
-  turnToPoint(24,0,1,1000);
+  claw.spin(fwd,12,volt);
+  turnToPoint(24,-24,1,1000);
+  driveTo(24,1000);
   stopChassis(coast);
+
+
+  
+
+
+  
+
+  
+  //turnToPoint(17.5,16.742,1,2500);
+  //moveToPoint(17.5,16.742,1,2500,false,10);
+  //wait(.5,sec);
+  
+  //turnToPoint(17.5,16.742,1,2500);
+  //moveToPoint(7.719,7.5 ,-1,2500,false,10);
+  //wait(.5,sec);
+  
+  //turnToPoint(18.013,-5.208,1,2500);
+  //moveToPoint(18.013,-5.208,1,2500,false,10);
+  //wait(.5,sec);
+
+  //turnToPoint(7.719,7.5 ,1,2500);
+  //moveToPoint(7.719,7.5 ,-1,2500,false,10);
+  //wait(.5,sec);
+
+  //turnToPoint(17.37,16.749,1,2500);
+  //moveToPoint(17.37,16.749,-1,2500,false,10);
+  
 }
+
+/*void BA_3pin(){
+  x_pos = 0;
+  y_pos = 0;
+  claw.spin(fwd,12,volt);
+
+  turnToPoint(17.5,16.742,1,2500);
+  moveToPoint(17.5,16.742,1,2500,false,10);
+  wait(.5,sec);
+  
+  turnToPoint(17.5,16.742,1,2500);
+  moveToPoint(7.719,7.5 ,-1,2500,false,10);
+  wait(.5,sec);
+  
+  turnToPoint(18.013,-5.208,1,2500);
+  moveToPoint(18.013,-5.208,1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(7.719,7.5 ,1,2500);
+  moveToPoint(7.719,7.5 ,-1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(17.37,16.749,1,2500);
+  moveToPoint(17.37,16.749,-1,2500,false,10);
+  wait(.5,sec);
+  //new compared to BA_2pin
+
+  turnToPoint(17.37,16.749,1,2500);
+  moveToPoint(-11.819,11.333,-1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-29.561,-5.539,1,2500);
+  moveToPoint(-29.561,-5.539,1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-29.561,-5.539,1,2500);
+  moveToPoint(-11.819,11.333,-1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-29.387,16.551,1,2500);
+  moveToPoint(-29.387,16.551,1,2500,false,10);
+  
+}
+
+void BAL_3pin(){
+  x_pos = 0;
+  y_pos = 0;
+  claw.spin(fwd,12,volt);
+
+  turnToPoint(-18.194,19.145,1,2500);
+  moveToPoint(-18.194,19.145,1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-18.194,19.145,1,2500);
+  moveToPoint(-18.194,3.231,-1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-42.383,19.145,1,2500);
+  moveToPoint(-42.383,19.145,1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-18.035,18.986,1,2500);
+  moveToPoint(-18.035,18.986,1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-18.035,18.986,1,2500);
+  moveToPoint(-32.994,19.304,-1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-18.512,43.016,1,2500);
+  moveToPoint(-18.512,43.016,1,2500,false,10);
+  wait(.5,sec);
+
+  turnToPoint(-18.193,18.986,1,2500);
+  moveToPoint(-18.193,18.986,1,2500,false,10); 
+  
+}
+*/
+
+
+
+
+

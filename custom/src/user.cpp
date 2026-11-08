@@ -198,20 +198,17 @@ void clawControlPranoy(){
 }
 
 void toggleControl(){
-  bool toggled=false;
   while(1){
-    if(controller_1.ButtonA.pressing()&&!toggled){
+    if(controller_1.ButtonA.pressing()){
       toggle.spin(fwd,12,volt);
-      toggled=true;
     }
     else{
       toggle.stop();
-      toggled=false;
     }
     
-    wait(20, msec);
+    wait(10, msec);
   } 
-}
+} 
 
 //stage 0 = 0 (placeholder, same as stage 1)
 //stage 1 = 0

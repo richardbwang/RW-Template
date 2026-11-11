@@ -816,16 +816,43 @@ void brainD(){
 // =============================================================================
 //Blue Auto
 
+int step_BA_2pin = 0;
+
+void lc_BA_2pin(){
+  while(step_BA_2pin==0) wait(10,msec);
+    lift.spin(fwd,12,volt);
+    wait(450,msec);
+    lift.stop(hold);
+  while(step_BA_2pin==1) wait(10,msec);
+    lift.spin(reverse,3,volt);
+    wait(500,msec);
+    lift.stop(hold);
+  while(step_BA_2pin==2) wait(10,msec);
+    lift.spin(reverse,12,volt);
+    wait(500,msec);
+    lift.stop();
+  while(step_BA_2pin==3) wait(10,msec);
+    lift.spin(fwd,12,volt);
+    wait(750,msec);
+    lift.stop();
+}
 
 void BA_2pin(){
+  thread a(lc_BA_2pin);
   x_pos = 0;
   y_pos = 0;
   
-  //toggles.spin(fwd,12,volt);
+  toggle.spin(fwd,12,volt);
+  wait(350,msec);
+  toggle.stop();
+  
+  step_BA_2pin++;
 
-  claw.spin(fwd,12,volt);
+  moveToPoint(17.5,8,1,2500,true,10);
 
-  moveToPoint(17.5,10.5,1,2500,true,10);
+  step_BA_2pin++;
+  
+  wait(500,msec);
 
   claw.spin(reverse,12,volt);
 
@@ -834,9 +861,19 @@ void BA_2pin(){
 
   
   driveTo(-6,1000);
+  step_BA_2pin++;
   claw.spin(fwd,12,volt);
-  turnToPoint(24,-24,1,1000);
-  driveTo(24,1000);
+  turnToPoint(28,-24,1,1000);
+  driveTo(10,1000,true,3);
+  wait(1000,msec);
+
+  step_BA_2pin++;
+  driveTo(-12,1000,10);
+  turnToPoint(18.5,2,1,500);
+  driveTo(12,1000,10);
+  left_chassis.spin(fwd,3,volt);
+  right_chassis.spin(fwd,3,volt);
+  // moveToPoint(16,3,1,2500,true,10);
   stopChassis(coast);
 
 

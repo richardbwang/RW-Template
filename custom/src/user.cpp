@@ -71,11 +71,17 @@ if (r1Pressed) {
 } else {
 // When manual input stops, sync requestedStage to current physical position
     if (wasManual) {
-      double currentDegrees = -liftHeight.position(deg);
+      double currentDegrees = liftHeight.position(deg);
 
-  if (currentDegrees >= 39.1) {
+  if (currentDegrees >= 407) {
+    requestedStage = 6;
+  }else if (currentDegrees >= 317){
+    requestedStage = 5;
+  } else if (currentDegrees >= 241){
+    requestedStage = 4;
+  } else if (currentDegrees >= 162){
     requestedStage = 3;
-} else if (currentDegrees >= 16.2) {
+} else if (currentDegrees >= 82) {
     requestedStage = 2;
 } else {
     requestedStage = 1;
@@ -86,14 +92,20 @@ wasManual = false;
 // Target stage positioning logic
 double targetRotation = 0;
   if (requestedStage == 0 || requestedStage == 1) {
-    targetRotation = 0;
+    targetRotation = 14;
 } else if (requestedStage == 2) {
-    targetRotation = -16.2;
+    targetRotation = 82;
 } else if (requestedStage == 3) {
-    targetRotation = -39.1;
+    targetRotation = 162;
+} else if (requestedStage == 4){
+    targetRotation = 241;
+} else if (requestedStage == 5){
+    targetRotation = 317;
+} else if (requestedStage == 6){
+    targetRotation = 407;
 }
 
-double error = targetRotation - (-liftHeight.position(deg));
+double error = targetRotation - (liftHeight.position(deg));
 
 if (std::fabs(error) <= 1.0) {
   lift.stop(hold);
@@ -218,13 +230,19 @@ void toggleControl(){
 //
 void rotationMeasure() {
   while (true) {
-    double rotationDegrees = -(liftHeight.position(deg));
+    double rotationDegrees = (liftHeight.position(deg));
    int stage = 1;
-if (rotationDegrees >= 39.1) {
-  stage = 3;
-} else if (rotationDegrees >= 16.2) {
+if (rotationDegrees >= 407) {
+  stage = 6;
+}else if (rotationDegrees >= 317){
+  stage = 5;
+}else if(rotationDegrees >= 241){
+stage = 4;
+} else if (rotationDegrees >= 162){ 
+    stage = 3;
+} else if (rotationDegrees >= 82) {
   stage = 2;
-} else if (rotationDegrees >= 0) {
+} else if (rotationDegrees >= 14) {
   stage = 1;
 }
 
@@ -280,15 +298,18 @@ wait(20, msec);
 
 void conD(){
   while(1){
+    // controller_1.Screen.clearLine(1);
+    // controller_1.Screen.setCursor(1,1);
+    // controller_1.Screen.print("%f",x_pos);
+    // controller_1.Screen.clearLine(2);
+    // controller_1.Screen.setCursor(2,1);
+    //     controller_1.Screen.print("%f",y_pos);
+    //     controller_1.Screen.clearLine(3);
+    // controller_1.Screen.setCursor(3,1);
+    //     controller_1.Screen.print("%f",getInertialHeading());
     controller_1.Screen.clearLine(1);
     controller_1.Screen.setCursor(1,1);
-    controller_1.Screen.print("%f",x_pos);
-    controller_1.Screen.clearLine(2);
-    controller_1.Screen.setCursor(2,1);
-        controller_1.Screen.print("%f",y_pos);
-        controller_1.Screen.clearLine(3);
-    controller_1.Screen.setCursor(3,1);
-        controller_1.Screen.print("%f",getInertialHeading());
+    controller_1.Screen.print("%f",liftHeight.position(deg));
     wait(100, msec);
   }
 }
@@ -301,7 +322,7 @@ void conD(){
 void runAutonomous() {
   int auton_selected = 1;
   thread a(brainD);
-  thread b(conD);
+  // thread b(conD);
   switch(auton_selected) {
     case 1:
       BA_2pin();
@@ -355,9 +376,9 @@ void runDriver() {
 
   // controller_1.rumble("---");
 
-  thread lift_control_thread(liftControl);
+ // thread lift_control_thread(liftControl);
   thread claw_control_thread(clawControl);
-  thread controller_display(conD);
+  // thread controller_display(conD);
   thread rotation_display(rotationMeasure);
   thread stage_setter_thread(stageSetter);
   thread toggle_thread(toggleControl);

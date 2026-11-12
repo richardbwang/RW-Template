@@ -376,7 +376,7 @@ void runDriver() {
 
   // controller_1.rumble("---");
 
- // thread lift_control_thread(liftControl);
+  thread lift_control_thread(liftControl);
   thread claw_control_thread(clawControl);
   // thread controller_display(conD);
   thread rotation_display(rotationMeasure);

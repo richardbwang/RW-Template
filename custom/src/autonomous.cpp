@@ -869,11 +869,10 @@ void BA_2pin(){
 
   step_BA_2pin++;
   driveTo(-12,1000,10);
-  turnToPoint(18.5,2,1,500);
-  driveTo(12,1000,10);
+  moveToPoint(17.5,8,1,2500,true,10);
   left_chassis.spin(fwd,3,volt);
   right_chassis.spin(fwd,3,volt);
-  // moveToPoint(16,3,1,2500,true,10);
+  //moveToPoint(16,3,1,2500,true,10);
   stopChassis(coast);
 
 

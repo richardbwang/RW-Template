@@ -841,9 +841,10 @@ void BA_2pin(){
   thread a(lc_BA_2pin);
   x_pos = 0;
   y_pos = 0;
+  driveTo(1.5,500);
   
   toggle.spin(fwd,12,volt);
-  wait(350,msec);
+  wait(750,msec);
   toggle.stop();
   
   step_BA_2pin++;
@@ -857,29 +858,36 @@ void BA_2pin(){
 
   wait(1,sec);
 
+  driveTo(-10,500);
+  stopChassis(coast);
+
+  moveToPoint(6,15,1,1000,false);
+  moveToPoint(18.5,30.5,1,1500);
+  claw.spin(fwd,12,volt);
+
 
   
-  driveTo(-6,1000);
-  step_BA_2pin++;
-  claw.spin(fwd,12,volt);
-  turnToPoint(28,-24,1,1000);
-  driveTo(10,1000,true,3);
-  wait(1000,msec);
+  // driveTo(-6,1000);
+  // step_BA_2pin++;
+  // claw.spin(fwd,12,volt);
+  // turnToPoint(28,-24,1,1000);
+  // driveTo(10,1000,true,3);
+  // wait(1000,msec);
 
-  step_BA_2pin=1;
-  driveTo(-12,1000,10);
-  moveToPoint(17.5,7,1,2500,true,10);
-  step_BA_2pin++;
-  left_chassis.spin(fwd,3,volt);
-  right_chassis.spin(fwd,3,volt);
-  //moveToPoint(16,3,1,2500,true,10);
-  stopChassis(coast);
-  step_BA_2pin++;
-  wait(500,msec);
+  // step_BA_2pin=1;
+  // driveTo(-12,1000,10);
+  // moveToPoint(17.5,7,1,2500,true,10);
+  // step_BA_2pin++;
+  // left_chassis.spin(fwd,3,volt);
+  // right_chassis.spin(fwd,3,volt);
+  // //moveToPoint(16,3,1,2500,true,10);
+  // stopChassis(coast);
+  // step_BA_2pin++;
+  // wait(500,msec);
 
-  claw.spin(reverse,12,volt);
+  // claw.spin(reverse,12,volt);
 
-  wait(1,sec);
+  // wait(1,sec);
 
   
 

@@ -162,17 +162,17 @@ void liftControl() {
 
 
 
-// void liftControl(){
-//   while(1){
-//     if(controller_1.ButtonR1.pressing()){
-//       lift.spin(fwd,12,volt);
-//     }else if(controller_1.ButtonR2.pressing()){
-//       lift.spin(reverse,12,volt);
-//     }else{
-//       lift.stop(hold);
-//     }
-//   }
-// }
+void liftControlSimple(){
+  while(1){
+    if(controller_1.ButtonR1.pressing()){
+      lift.spin(fwd,12,volt);
+    }else if(controller_1.ButtonR2.pressing()){
+      lift.spin(reverse,12,volt);
+    }else{
+      lift.stop(hold);
+    }
+  }
+}
 
 bool clawOverride = false;
 
@@ -410,7 +410,7 @@ void runDriver() {
 
   // controller_1.rumble("---");
 
-  thread lift_control_thread(liftControl);
+  thread lift_control_thread(liftControlSimple);
   thread claw_control_thread(clawControl);
   // thread controller_display(conD);
   thread rotation_display(rotationMeasure);

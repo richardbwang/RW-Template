@@ -43,7 +43,7 @@ const double STAGE_PASS_TOL = 3.0;  // deg: how far past a stage counts as "abov
 // stop) and nothing moves, change this to -1. Quick check: whichever of R1 / R2
 // makes the Brain's "Rotation" number go UP is the direction the stages must use:
 //   R2 raises the number -> keep 1       R1 raises the number -> set -1
-const int STAGE_DIR = 1;
+const int STAGE_DIR = -1;
 
 // stageSetter -> liftControl messages. liftControl is the ONLY thread that
 // moves the lift, so there is no tug-of-war and no stale stage number.
@@ -410,7 +410,7 @@ void runDriver() {
 
   // controller_1.rumble("---");
 
-  thread lift_control_thread(liftControlSimple);
+  thread lift_control_thread(liftControl);
   thread claw_control_thread(clawControl);
   // thread controller_display(conD);
   thread rotation_display(rotationMeasure);

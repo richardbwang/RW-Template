@@ -28,8 +28,20 @@ float deadband(float input, float width){
   return(input);
 }
 
-volatile int requestedStage = 1;
 bool manualMode = false;
+
+// Stage positions in lift-rotation degrees. Index = stage number.
+// Stage 0 and stage 1 are both the bottom position.
+const int NUM_STAGES = 7;
+const double STAGE_DEG[NUM_STAGES] = {14, 14, 82, 162, 241, 317, 407};
+const int MIN_STAGE = 0;
+const int MAX_STAGE = 6;
+const double STAGE_PASS_TOL = 3.0;  // deg: how far past a stage counts as "above/below" it
+
+// stageSetter -> liftControl messages. liftControl is the ONLY thread that
+// moves the lift, so there is no tug-of-war and no stale stage number.
+enum { CMD_NONE = 0, CMD_UP, CMD_DOWN, CMD_BOTTOM };
+volatile int stageCommand = CMD_NONE;
 
 
 void controlNormalized() {
@@ -55,71 +67,71 @@ void controlNormalized() {
 }
 
 
+// Stage button pressed -> go to that stage and hold there.
+// R1 / R2 held     -> manual control from wherever you are.
+// Manual released  -> lift HOLDS where you let go (it is NOT sent back to a stage).
+// Up / Down arrows step to the next stage above / below the current TARGET
+// (so double-taps still work mid-move and manual moves are respected).
 void liftControl() {
-bool wasManual = false;
+  double targetDeg = STAGE_DEG[1];   // start by holding the bottom stage
+  bool wasManual = false;
 
   while (true) {
-    bool r1Pressed = controller_1.ButtonR1.pressing();
-    bool r2Pressed = controller_1.ButtonR2.pressing();
+    double pos = liftHeight.position(deg);
 
-if (r1Pressed) {
-  lift.spin(fwd, 12, volt);
-  wasManual = true;
-} else if (r2Pressed) {
-    lift.spin(reverse, 12, volt);
-    wasManual = true;
-} else {
-// When manual input stops, sync requestedStage to current physical position
-    if (wasManual) {
-      double currentDegrees = liftHeight.position(deg);
+    if (controller_1.ButtonR1.pressing()) {
+      lift.spin(fwd, 12, volt);
+      wasManual = true;
+      stageCommand = CMD_NONE;       // ignore stage presses while driving manually
+    } else if (controller_1.ButtonR2.pressing()) {
+      lift.spin(reverse, 12, volt);
+      wasManual = true;
+      stageCommand = CMD_NONE;
+    } else {
+      if (wasManual) {
+        targetDeg = pos;             // just released: hold exactly here
+        wasManual = false;
+      }
 
-  if (currentDegrees >= 407) {
-    requestedStage = 6;
-  }else if (currentDegrees >= 317){
-    requestedStage = 5;
-  } else if (currentDegrees >= 241){
-    requestedStage = 4;
-  } else if (currentDegrees >= 162){
-    requestedStage = 3;
-} else if (currentDegrees >= 82) {
-    requestedStage = 2;
-} else {
-    requestedStage = 1;
-}
-wasManual = false;
-}
+      // Consume at most one stage command per tick
+      int cmd = stageCommand;
+      stageCommand = CMD_NONE;
 
-// Target stage positioning logic
-double targetRotation = 0;
-  if (requestedStage == 0 || requestedStage == 1) {
-    targetRotation = 14;
-} else if (requestedStage == 2) {
-    targetRotation = 82;
-} else if (requestedStage == 3) {
-    targetRotation = 162;
-} else if (requestedStage == 4){
-    targetRotation = 241;
-} else if (requestedStage == 5){
-    targetRotation = 317;
-} else if (requestedStage == 6){
-    targetRotation = 407;
-}
+      if (cmd == CMD_UP) {
+        for (int st = 1; st <= MAX_STAGE; st++) {
+          if (STAGE_DEG[st] > targetDeg + STAGE_PASS_TOL) {
+            targetDeg = STAGE_DEG[st];
+            break;
+          }
+        }
+      } else if (cmd == CMD_DOWN) {
+        double lower = STAGE_DEG[0];  // fall back to the bottom
+        for (int st = MAX_STAGE; st >= 1; st--) {
+          if (STAGE_DEG[st] < targetDeg - STAGE_PASS_TOL) {
+            lower = STAGE_DEG[st];
+            break;
+          }
+        }
+        targetDeg = lower;
+      } else if (cmd == CMD_BOTTOM) {
+        targetDeg = STAGE_DEG[0];
+      }
 
-double error = targetRotation - (liftHeight.position(deg));
+      double error = targetDeg - pos;
 
-if (std::fabs(error) <= 1.0) {
-  lift.stop(hold);
-} else {
-    double voltage = std::fmin(std::fabs(error) * 0.5, 12.0);
-if (error < 0) {
-  lift.spin(fwd, voltage, volt);
-} else {
-    lift.spin(reverse, voltage, volt);
+      if (std::fabs(error) <= 1.0) {
+        lift.stop(hold);
+      } else {
+        double voltage = std::fmin(std::fabs(error) * 0.5, 12.0);
+        if (error < 0) {
+          lift.spin(fwd, voltage, volt);
+        } else {
+          lift.spin(reverse, voltage, volt);
+        }
       }
     }
+    wait(20, msec);
   }
-  wait(20, msec);
-}
 }
 
 
@@ -256,10 +268,8 @@ stage = 4;
 }
 
 
-// Up arrow raises the stage by one, down arrow lowers it by one.
-const int MIN_STAGE = 0;
-const int MAX_STAGE = 3;
-
+// Up arrow = next stage up, Down arrow = next stage down, Right arrow = bottom.
+// This only sends a command; liftControl does the moving.
 void stageSetter() {
   bool upWasPressed = false;
   bool downWasPressed = false;
@@ -272,26 +282,25 @@ void stageSetter() {
     bool rightPressed = controller_1.ButtonRight.pressing();
     bool manualBtnPressed = controller_1.ButtonLeft.pressing();
 
-// Toggle manual mode
-if (manualBtnPressed && !manualBtnWasPressed) {
-  manualMode = !manualMode;
-}
-  manualBtnWasPressed = manualBtnPressed;
+    // Toggle manual mode
+    if (manualBtnPressed && !manualBtnWasPressed) {
+      manualMode = !manualMode;
+    }
+    manualBtnWasPressed = manualBtnPressed;
 
-// Stage controls (updates requestedStage without fighting motors)
-if (upPressed && !upWasPressed && requestedStage < MAX_STAGE) {
-  requestedStage++;
-} else if (downPressed && !downWasPressed && requestedStage > MIN_STAGE) {
-  requestedStage--;
-} else if (rightPressed && !rightWasPressed) {
-  requestedStage = 0;
-}
+    if (upPressed && !upWasPressed) {
+      stageCommand = CMD_UP;
+    } else if (downPressed && !downWasPressed) {
+      stageCommand = CMD_DOWN;
+    } else if (rightPressed && !rightWasPressed) {
+      stageCommand = CMD_BOTTOM;
+    }
 
-upWasPressed = upPressed;
-downWasPressed = downPressed;
-rightWasPressed = rightPressed;
-wait(20, msec);
-}
+    upWasPressed = upPressed;
+    downWasPressed = downPressed;
+    rightWasPressed = rightPressed;
+    wait(20, msec);
+  }
 }
 
 

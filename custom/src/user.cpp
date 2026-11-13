@@ -38,6 +38,13 @@ const int MIN_STAGE = 0;
 const int MAX_STAGE = 6;
 const double STAGE_PASS_TOL = 3.0;  // deg: how far past a stage counts as "above/below" it
 
+// Direction of the stage loop. 1 = the lift is driven with `reverse` to INCREASE
+// the rotation reading. If pressing Up pushes the lift the wrong way (or into its
+// stop) and nothing moves, change this to -1. Quick check: whichever of R1 / R2
+// makes the Brain's "Rotation" number go UP is the direction the stages must use:
+//   R2 raises the number -> keep 1       R1 raises the number -> set -1
+const int STAGE_DIR = 1;
+
 // stageSetter -> liftControl messages. liftControl is the ONLY thread that
 // moves the lift, so there is no tug-of-war and no stale stage number.
 enum { CMD_NONE = 0, CMD_UP, CMD_DOWN, CMD_BOTTOM };
@@ -75,6 +82,12 @@ void controlNormalized() {
 void liftControl() {
   double targetDeg = STAGE_DEG[1];   // start by holding the bottom stage
   bool wasManual = false;
+  bool moveActive = true;            // a stage move is in progress (startup move to the bottom stage counts)
+  double moveStartErr = std::fabs(STAGE_DEG[1] - liftHeight.position(deg));  // |error| when that move began
+
+  // Which motor direction raises the rotation reading
+  auto raiseDir = (STAGE_DIR == 1) ? reverse : fwd;
+  auto lowerDir = (STAGE_DIR == 1) ? fwd : reverse;
 
   while (true) {
     double pos = liftHeight.position(deg);
@@ -117,16 +130,28 @@ void liftControl() {
         targetDeg = STAGE_DEG[0];
       }
 
+      if (cmd != CMD_NONE) {
+        moveActive = true;
+        moveStartErr = std::fabs(targetDeg - pos);
+      }
+
       double error = targetDeg - pos;
 
       if (std::fabs(error) <= 1.0) {
         lift.stop(hold);
+        moveActive = false;
+      } else if (moveActive && std::fabs(error) > moveStartErr + 25.0) {
+        // Moving AWAY from the target = direction is backwards. Stop instead of
+        // running into the end of travel, and hold where we are.
+        lift.stop(hold);
+        targetDeg = pos;
+        moveActive = false;
       } else {
         double voltage = std::fmin(std::fabs(error) * 0.5, 12.0);
         if (error < 0) {
-          lift.spin(fwd, voltage, volt);
+          lift.spin(lowerDir, voltage, volt);
         } else {
-          lift.spin(reverse, voltage, volt);
+          lift.spin(raiseDir, voltage, volt);
         }
       }
     }
